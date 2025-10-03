@@ -38,7 +38,7 @@ class MyApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: 'Classroom CRM',
+        title: 'Joussour',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           primarySwatch: Colors.blue,
@@ -65,7 +65,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
     return StreamBuilder<User?>(
       stream: AuthService().authStateChanges,
       builder: (context, authSnapshot) {
-        // Journalisation pour le débogage
         print('🔄 AuthWrapper - Firebase user: ${authSnapshot.data?.email}');
         print('🔄 AuthWrapper - Provider user: ${userProvider.user?.email}');
         print('🔄 AuthWrapper - Provider loading: ${userProvider.isLoading}');
@@ -76,13 +75,13 @@ class _AuthWrapperState extends State<AuthWrapper> {
           return _buildLoadingScreen();
         }
 
-        // Vérifier la cohérence entre Firebase et le Provider
         final firebaseUser = authSnapshot.data;
         final providerUser = userProvider.user;
 
         // CAS 1: Incohérence - Firebase a un user mais pas le Provider
         if (firebaseUser != null && providerUser == null) {
           print('⚠️ Incohérence: Firebase connecté mais Provider vide');
+          print('🔍 User ID: ${firebaseUser.uid}');
           _syncUserFromFirebase(firebaseUser.uid);
           return _buildLoadingScreen();
         }
@@ -91,7 +90,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         if (firebaseUser == null && providerUser != null) {
           print('⚠️ Incohérence: Firebase déconnecté mais Provider a un user');
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            userProvider.signOut();
+            userProvider.clearUser();
           });
           return _buildLoadingScreen();
         }
@@ -137,15 +136,25 @@ class _AuthWrapperState extends State<AuthWrapper> {
         print('✅ Synchronisation réussie: ${user.email}');
         Provider.of<UserProvider>(context, listen: false).setUser(user);
       } else {
-        print('❌ Échec synchronisation - Déconnexion forcée');
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          Provider.of<UserProvider>(context, listen: false).signOut();
-        });
+        print('⚠️ Synchronisation échouée - données non trouvées');
+        // Réessayer après un délai
+        await Future.delayed(const Duration(seconds: 2));
+        
+        final userRetry = await AuthService().getCurrentUser();
+        if (userRetry != null && mounted) {
+          print('✅ Synchronisation réussie au 2ème essai: ${userRetry.email}');
+          Provider.of<UserProvider>(context, listen: false).setUser(userRetry);
+        } else {
+          print('❌ Échec définitif de synchronisation');
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            Provider.of<UserProvider>(context, listen: false).clearUser();
+          });
+        }
       }
     } catch (e) {
       print('❌ Erreur synchronisation: $e');
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        Provider.of<UserProvider>(context, listen: false).signOut();
+        Provider.of<UserProvider>(context, listen: false).clearUser();
       });
     }
   }

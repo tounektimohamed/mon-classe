@@ -40,6 +40,10 @@ dependencies:
   firebase_storage: ^13.0.2
   file_picker: ^10.3.3
   clipboard: ^2.0.2
+  open_filex: ^4.7.0
+  path_provider: ^2.1.5
+  permission_handler: ^12.0.1
+  universal_html: ^2.2.4
 
 dev_dependencies:
   flutter_test:
@@ -62,6 +66,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+  assets:
+    - assets/images/
+
 
   # To add assets to your application, add an assets section, like this:
   # assets:

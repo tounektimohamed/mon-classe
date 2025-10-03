@@ -17,27 +17,41 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  String? _errorMessage;
 
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
     try {
-      final user = await AuthService().signIn(
+      final userProvider = Provider.of<UserProvider>(context, listen: false);
+      await userProvider.signIn(
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
       
-      if (user != null) {
-        Provider.of<UserProvider>(context, listen: false).setUser(user);
-      }
+      // La redirection se fera automatiquement via l'AuthWrapper
+      
     } catch (e) {
+      String errorMessage = e.toString().replaceAll('Exception: ', '');
+      setState(() {
+        _errorMessage = errorMessage;
+      });
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -45,15 +59,26 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(24.0),
         child: Form(
           key: _formKey,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+               Image.asset(
+                'assets/images/lojo.png',
+                width: 130,  // Augmenté de 80 à 120
+                height: 130, // Augmenté de 80 à 120
+                fit: BoxFit.contain,
+              ),
+              const SizedBox(height: 5),
               const Text(
-                'Classroom CRM',
-                style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                ' Jousour',
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue,
+                ),
               ),
               const SizedBox(height: 8),
               const Text(
@@ -61,15 +86,44 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: TextStyle(fontSize: 16, color: Colors.grey),
               ),
               const SizedBox(height: 32),
+              
+              if (_errorMessage != null)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.red[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error, color: Colors.red, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              
               TextFormField(
                 controller: _emailController,
                 decoration: const InputDecoration(
                   labelText: 'Email',
                   prefixIcon: Icon(Icons.email),
+                  border: OutlineInputBorder(),
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Veuillez entrer votre email';
+                  }
+                  if (!value.contains('@')) {
+                    return 'Email invalide';
                   }
                   return null;
                 },
@@ -81,10 +135,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Mot de passe',
                   prefixIcon: Icon(Icons.lock),
+                  border: OutlineInputBorder(),
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Veuillez entrer votre mot de passe';
+                  }
+                  if (value.length < 6) {
+                    return 'Le mot de passe doit contenir au moins 6 caractères';
                   }
                   return null;
                 },
@@ -95,29 +153,55 @@ class _LoginScreenState extends State<LoginScreen> {
                 height: 50,
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _login,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
                   child: _isLoading
-                      ? const CircularProgressIndicator()
-                      : const Text('Se connecter'),
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Se connecter',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                 ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Ou créez un compte',
+                style: TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
-                    child: TextButton(
+                    child: OutlinedButton(
                       onPressed: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const TeacherRegisterScreen(),
+                            builder: (context) => const TeacherSignUpScreen(),
                           ),
                         );
                       },
-                      child: const Text('Je suis enseignant'),
+                      child: const Text('Enseignant'),
                     ),
                   ),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: TextButton(
+                    child: OutlinedButton(
                       onPressed: () {
                         Navigator.push(
                           context,
@@ -126,7 +210,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         );
                       },
-                      child: const Text('Je suis parent'),
+                      child: const Text('Parent'),
                     ),
                   ),
                 ],

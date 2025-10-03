@@ -1,0 +1,15 @@
+2025/10/03-20:07:50.232 219b0 Creating DB /tmp/flutter_tools.UPUVSP/flutter_tools_chrome_device.SUTIMU/Default/IndexedDB/http_localhost_40669.indexeddb.leveldb since it was missing.
+2025/10/03-20:07:50.252 219b0 Reusing MANIFEST /tmp/flutter_tools.UPUVSP/flutter_tools_chrome_device.SUTIMU/Default/IndexedDB/http_localhost_40669.indexeddb.leveldb/MANIFEST-000001
+2025/10/03-20:07:50.317 219b2 Level-0 table #5: started
+2025/10/03-20:07:50.345 219b2 Level-0 table #5: 1311 bytes OK
+2025/10/03-20:07:50.354 219b2 Delete type=0 #3
+2025/10/03-20:07:50.355 219b2 Manual compaction at level-0 from '\x00\x01\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x02\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/10/03-20:12:41.711 219b1 Level-0 table #7: started
+2025/10/03-20:12:41.741 219b1 Level-0 table #7: 1607457 bytes OK
+2025/10/03-20:12:41.759 219b1 Delete type=0 #4
+2025/10/03-20:12:52.144 219b1 Compacting 1@1 + 1@2 files
+2025/10/03-20:12:52.155 219b1 Generated table #8@1: 37 keys, 3323 bytes
+2025/10/03-20:12:52.156 219b1 Compacted 1@1 + 1@2 files => 3323 bytes
+2025/10/03-20:12:52.164 219b1 compacted to: files[ 0 0 1 0 0 0 0 ]
+2025/10/03-20:12:52.164 219b1 Delete type=2 #5
+2025/10/03-20:12:52.164 219b1 Delete type=2 #7

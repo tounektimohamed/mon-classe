@@ -35,8 +35,7 @@ class UserProvider with ChangeNotifier {
           _user = currentUser;
           _error = null;
         } else {
-          print('❌ Utilisateur Firebase mais pas de données Firestore - Déconnexion forcée');
-          await AuthService().forceSignOut();
+          print('❌ Utilisateur Firebase mais pas de données Firestore');
           _user = null;
         }
       } else {
@@ -47,13 +46,6 @@ class UserProvider with ChangeNotifier {
       print('❌ Erreur lors de l\'initialisation UserProvider: $e');
       _error = 'Erreur lors du chargement de l\'utilisateur';
       _user = null;
-      
-      // En cas d'erreur, forcer la déconnexion
-      try {
-        await AuthService().forceSignOut();
-      } catch (e) {
-        print('Erreur lors de la déconnexion de secours: $e');
-      }
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -85,7 +77,7 @@ class UserProvider with ChangeNotifier {
     }
   }
 
-  // CONNEXION AVEC NETTOYAGE
+  // CONNEXION
   Future<void> signIn(String email, String password) async {
     try {
       _isLoading = true;
@@ -94,7 +86,6 @@ class UserProvider with ChangeNotifier {
       
       print('🔐 UserProvider - Tentative de connexion: $email');
       
-      // Utiliser le AuthService pour la connexion
       UserModel? user = await AuthService().signIn(email, password);
       
       if (user != null) {
@@ -108,6 +99,82 @@ class UserProvider with ChangeNotifier {
       print('❌ UserProvider - Erreur de connexion: $e');
       _error = e.toString().replaceAll('Exception: ', '');
       _user = null;
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // INSCRIPTION ENSEIGNANT
+  Future<void> signUpTeacher({
+    required String email,
+    required String password,
+    required String firstName,
+    required String lastName,
+    required String schoolName,
+    required String className,
+  }) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+      
+      print('👨‍🏫 UserProvider - Inscription enseignant: $email');
+      
+      UserModel user = await AuthService().signUpTeacher(
+        email: email,
+        password: password,
+        firstName: firstName,
+        lastName: lastName,
+        schoolName: schoolName,
+        className: className,
+      );
+      
+      print('✅ UserProvider - Inscription réussie: ${user.email}');
+      _user = user;
+      _error = null;
+      
+    } catch (e) {
+      print('❌ UserProvider - Erreur inscription: $e');
+      _error = e.toString().replaceAll('Exception: ', '');
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // INSCRIPTION PARENT
+  Future<void> signUpParent({
+    required String email,
+    required String password,
+    required String firstName,
+    required String lastName,
+    required String studentId,
+  }) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+      
+      print('👨‍👩‍👧‍👦 UserProvider - Inscription parent: $email');
+      
+      UserModel user = await AuthService().signUpParent(
+        email: email,
+        password: password,
+        firstName: firstName,
+        lastName: lastName,
+        studentId: studentId,
+      );
+      
+      print('✅ UserProvider - Inscription parent réussie: ${user.email}');
+      _user = user;
+      _error = null;
+      
+    } catch (e) {
+      print('❌ UserProvider - Erreur inscription parent: $e');
+      _error = e.toString().replaceAll('Exception: ', '');
       rethrow;
     } finally {
       _isLoading = false;

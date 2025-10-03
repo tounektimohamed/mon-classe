@@ -22,13 +22,14 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
   
   bool _isLoading = false;
   List<PlatformFile> _selectedFiles = [];
+  List<Map<String, dynamic>> _uploadedFiles = [];
 
   Future<void> _pickFiles() async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         allowMultiple: true,
         type: FileType.custom,
-        allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'],
+        allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'txt'],
       );
 
       if (result != null) {
@@ -37,28 +38,8 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
         });
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur lors de la sélection: $e')),
-      );
+      _showError('Erreur lors de la sélection des fichiers: $e');
     }
-  }
-
-  Future<List<String>> _uploadFiles() async {
-    List<String> downloadUrls = [];
-    
-    for (var file in _selectedFiles) {
-      try {
-        final url = await _storageService.uploadFile(
-          file: file,
-          folder: 'announcements',
-        );
-        downloadUrls.add(url);
-      } catch (e) {
-        print('Erreur upload ${file.name}: $e');
-      }
-    }
-    
-    return downloadUrls;
   }
 
   Future<void> _publishAnnouncement() async {
@@ -68,36 +49,54 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
 
     try {
       final user = Provider.of<UserProvider>(context, listen: false).user;
-      List<String> attachments = [];
-
-      // Upload des fichiers si présents
-      if (_selectedFiles.isNotEmpty) {
-        attachments = await _uploadFiles();
+      
+      if (user == null || user.classId == null) {
+        throw Exception('Utilisateur ou classe non trouvée');
       }
 
+      // Créer l'ID de l'annonce
+      final announcementId = DateTime.now().millisecondsSinceEpoch.toString();
+
+      // Uploader les fichiers vers Firebase Storage si présents
+      if (_selectedFiles.isNotEmpty) {
+        _uploadedFiles = await _storageService.uploadFiles(
+          files: _selectedFiles,
+          announcementId: announcementId,
+        );
+
+        // Sauvegarder les métadonnées dans Firestore
+        await _storageService.saveFileMetadata(
+          announcementId: announcementId,
+          filesMetadata: _uploadedFiles,
+        );
+      }
+
+      // Créer l'annonce avec les URLs des fichiers
       final announcement = Announcement(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        classId: user!.classId!,
+        id: announcementId,
+        classId: user.classId!,
         authorId: user.uid,
+        authorName: '${user.firstName} ${user.lastName}',
         title: _titleController.text.trim(),
         content: _contentController.text.trim(),
         timestamp: DateTime.now(),
-        attachments: attachments,
+        attachments: _uploadedFiles.map((file) => file['url'] as String).toList(),
+        reactions: [],
+        comments: [],
       );
 
+      // Sauvegarder l'annonce dans Firestore
       await _firestoreService.createAnnouncement(announcement);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Annonce publiée avec succès')),
-      );
-
+      _showSuccess('Annonce publiée avec succès');
       Navigator.pop(context);
+      
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur: $e')),
-      );
+      _showError('Erreur: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -107,104 +106,304 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
     });
   }
 
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  String _getFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1048576) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / 1048576).toStringAsFixed(1)} MB';
+  }
+
+  Widget _buildFileIcon(String fileName) {
+    final extension = fileName.split('.').last.toLowerCase();
+    
+    switch (extension) {
+      case 'pdf':
+        return const Icon(Icons.picture_as_pdf, color: Colors.red, size: 24);
+      case 'doc':
+      case 'docx':
+        return const Icon(Icons.description, color: Colors.blue, size: 24);
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+        return const Icon(Icons.image, color: Colors.green, size: 24);
+      case 'txt':
+        return const Icon(Icons.text_fields, color: Colors.orange, size: 24);
+      default:
+        return const Icon(Icons.insert_drive_file, color: Colors.grey, size: 24);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Nouvelle annonce'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: _isLoading ? null : () => Navigator.pop(context),
+        ),
         actions: [
-          IconButton(
-            onPressed: _isLoading ? null : _publishAnnouncement,
-            icon: _isLoading
-                ? const CircularProgressIndicator()
-                : const Icon(Icons.send),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: ElevatedButton.icon(
+              onPressed: _isLoading ? null : _publishAnnouncement,
+              icon: _isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send, size: 18),
+              label: Text(_isLoading ? 'Publication...' : 'Publier'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue[600],
+                foregroundColor: Colors.white,
+              ),
+            ),
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Titre de l\'annonce',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Veuillez entrer un titre';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 20),
-              TextFormField(
-                controller: _contentController,
-                maxLines: 10,
-                decoration: const InputDecoration(
-                  labelText: 'Contenu de l\'annonce',
-                  border: OutlineInputBorder(),
-                  alignLabelWithHint: true,
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Veuillez entrer le contenu de l\'annonce';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 20),
-              // Section pièces jointes
-              Row(
+      body: _isLoading
+          ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text(
-                    'Pièces jointes',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const Spacer(),
-                  ElevatedButton.icon(
-                    onPressed: _pickFiles,
-                    icon: const Icon(Icons.attach_file),
-                    label: const Text('Ajouter des fichiers'),
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text(
+                    'Publication en cours...',
+                    style: TextStyle(fontSize: 16, color: Colors.grey),
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
-              // Liste des fichiers sélectionnés
-              if (_selectedFiles.isNotEmpty) ...[
-                ..._selectedFiles.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final file = entry.value;
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    child: ListTile(
-                      leading: const Icon(Icons.insert_drive_file),
-                      title: Text(
-                        file.name,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text('${(file.size / 1024).toStringAsFixed(1)} KB'),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => _removeFile(index),
+            )
+          : Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Form(
+                key: _formKey,
+                child: ListView(
+                  children: [
+                    // En-tête
+                    Text(
+                      'Créer une annonce',
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  );
-                }).toList(),
-                const SizedBox(height: 10),
-                Text(
-                  '${_selectedFiles.length} fichier(s) sélectionné(s)',
-                  style: const TextStyle(color: Colors.grey),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Partagez des informations importantes avec les parents',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Champ titre
+                    TextFormField(
+                      controller: _titleController,
+                      decoration: const InputDecoration(
+                        labelText: 'Titre de l\'annonce *',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.title),
+                        hintText: 'Ex: Réunion parents-professeurs',
+                      ),
+                      maxLength: 100,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Veuillez entrer un titre';
+                        }
+                        if (value.length < 3) {
+                          return 'Le titre doit contenir au moins 3 caractères';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Champ contenu
+                    TextFormField(
+                      controller: _contentController,
+                      maxLines: 8,
+                      decoration: const InputDecoration(
+                        labelText: 'Contenu de l\'annonce *',
+                        border: OutlineInputBorder(),
+                        alignLabelWithHint: true,
+                        hintText: 'Décrivez votre annonce en détail...',
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Veuillez entrer le contenu de l\'annonce';
+                        }
+                        if (value.length < 10) {
+                          return 'Le contenu doit contenir au moins 10 caractères';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Section pièces jointes
+                    Card(
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.attach_file, color: Colors.blue),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'Pièces jointes',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const Spacer(),
+                                if (_selectedFiles.isNotEmpty)
+                                  Text(
+                                    '${_selectedFiles.length} fichier(s)',
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Ajoutez des documents, images ou autres fichiers pour accompagner votre annonce',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 13,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            
+                            // Bouton d'ajout de fichiers
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: _pickFiles,
+                                icon: const Icon(Icons.add),
+                                label: const Text('Ajouter des fichiers'),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                ),
+                              ),
+                            ),
+
+                            // Liste des fichiers sélectionnés
+                            if (_selectedFiles.isNotEmpty) ...[
+                              const SizedBox(height: 16),
+                              const Divider(),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Fichiers sélectionnés:',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              ..._selectedFiles.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final file = entry.value;
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[50],
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.grey[300]!),
+                                  ),
+                                  child: ListTile(
+                                    leading: _buildFileIcon(file.name),
+                                    title: Text(
+                                      file.name,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                    subtitle: Text(
+                                      _getFileSize(file.size),
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    trailing: IconButton(
+                                      icon: const Icon(
+                                        Icons.delete,
+                                        color: Colors.red,
+                                        size: 20,
+                                      ),
+                                      onPressed: () => _removeFile(index),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                                    dense: true,
+                                  ),
+                                );
+                              }).toList(),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Informations sur la publication
+                    Card(
+                      elevation: 1,
+                      color: Colors.blue[50],
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Cette annonce sera visible par tous les parents de votre classe',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blue[800],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 20),
-              ],
-            ],
-          ),
-        ),
-      ),
+              ),
+            ),
     );
   }
 

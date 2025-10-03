@@ -13,20 +13,12 @@ class AuthService {
   Future<void> forceSignOut() async {
     try {
       print('🚪 Déconnexion forcée en cours...');
-      
-      // Méthode agressive pour garantir la déconnexion
       await _auth.signOut();
+      await Future.delayed(const Duration(milliseconds: 500));
       
-      // Attendre que Firebase traite la déconnexion
-      await Future.delayed(const Duration(milliseconds: 800));
-      
-      // Vérifier que la déconnexion est effective
       if (_auth.currentUser != null) {
-        print('⚠️ User toujours connecté, nouvelle tentative...');
         await _auth.signOut();
-        await Future.delayed(const Duration(milliseconds: 300));
       }
-      
       print('✅ Déconnexion forcée réussie');
     } catch (e) {
       print('❌ Erreur forceSignOut: $e');
@@ -34,106 +26,63 @@ class AuthService {
     }
   }
 
-  // CONNEXION AVEC NETTOYAGE COMPLET
-  Future<UserModel?> signIn(String email, String password) async {
-    try {
-      print('🔐 Tentative de connexion: $email');
-
-      // S'assurer d'être déconnecté avant de se connecter
-      if (_auth.currentUser != null) {
-        print('🔄 Nettoyage de la session précédente...');
-        await forceSignOut();
-        await Future.delayed(const Duration(milliseconds: 500));
-      }
-
-      // Configurer la persistance
-      await _auth.setPersistence(Persistence.LOCAL);
-      
-      UserCredential result = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      
-      // Attendre que l'authentification soit complète
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      // Recharger l'utilisateur pour s'assurer des données fraîches
-      await result.user?.reload();
-      User? freshUser = _auth.currentUser;
-      
-      if (freshUser == null) {
-        throw Exception('Échec de la connexion');
-      }
-
-      print('✅ Firebase auth réussie, récupération des données Firestore...');
-
-      // Récupérer les données utilisateur depuis Firestore
-      DocumentSnapshot userDoc = await _firestore
-          .collection('users')
-          .doc(freshUser.uid)
-          .get();
-      
-      if (userDoc.exists) {
-        final userData = userDoc.data() as Map<String, dynamic>;
-        final userModel = UserModel.fromMap(userData);
-        print('✅ Utilisateur connecté: ${userModel.email} - Rôle: ${userModel.role}');
-        return userModel;
-      }
-      
-      throw Exception('Profil utilisateur non trouvé');
-      
-    } on FirebaseAuthException catch (e) {
-      print('❌ FirebaseAuthException: ${e.code}');
-      throw Exception(_getAuthErrorMessage(e.code));
-    } catch (e) {
-      print('❌ Erreur de connexion: $e');
-      throw Exception('Erreur de connexion: $e');
-    }
-  }
-
-  // INSCRIPTION ENSEIGNANT
+  // INSCRIPTION ENSEIGNANT - CORRIGÉE
   Future<UserModel> signUpTeacher({
     required String email,
     required String password,
     required String firstName,
     required String lastName,
     required String schoolName,
+    required String className,
   }) async {
     try {
       print('👨‍🏫 Inscription enseignant: $email');
 
-      // Vérifier d'abord si l'email existe déjà
-      try {
-        await _auth.signInWithEmailAndPassword(
-          email: email,
-          password: 'temporary_password',
-        );
-        throw Exception('Un compte avec cet email existe déjà.');
-      } on FirebaseAuthException catch (e) {
-        if (e.code == 'user-not-found') {
-          // Email disponible, continuer
-        } else if (e.code == 'wrong-password') {
-          throw Exception('Un compte avec cet email existe déjà.');
-        } else {
-          throw Exception(_getAuthErrorMessage(e.code));
-        }
-      }
-
       // Configurer la persistance
       await _auth.setPersistence(Persistence.LOCAL);
 
+      // Créer l'utilisateur
       UserCredential result = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
 
+      print('✅ Compte Firebase créé: ${result.user!.uid}');
+
+      // Attendre la synchronisation Firebase
+      await Future.delayed(const Duration(seconds: 1));
+      await result.user!.reload();
+      
+      // Vérifier que l'utilisateur est bien authentifié
+      if (_auth.currentUser == null) {
+        throw Exception('Erreur de création de compte');
+      }
+
+      final classNameFinal = className.isEmpty ? 'Classe de $firstName $lastName' : className;
+      
+      // Vérifier si une classe avec le même nom existe déjà
+      final existingClassQuery = await _firestore
+          .collection('classes')
+          .where('schoolName', isEqualTo: schoolName)
+          .where('name', isEqualTo: classNameFinal)
+          .get();
+
+      if (existingClassQuery.docs.isNotEmpty) {
+        await result.user!.delete();
+        throw Exception('Une classe avec ce nom existe déjà dans cette école.');
+      }
+
       // Créer une nouvelle classe
       DocumentReference classRef = await _firestore.collection('classes').add({
-        'name': 'Classe de $firstName $lastName',
+        'name': classNameFinal,
         'schoolName': schoolName,
         'teacherId': result.user!.uid,
+        'teacherEmail': email,
+        'teacherName': '$firstName $lastName',
         'createdAt': DateTime.now().millisecondsSinceEpoch,
       });
+
+      print('✅ Classe créée: ${classRef.id}');
 
       // Créer le profil enseignant
       UserModel teacher = UserModel(
@@ -146,24 +95,41 @@ class AuthService {
         createdAt: DateTime.now(),
       );
 
+      // Sauvegarder dans Firestore
       await _firestore
           .collection('users')
           .doc(result.user!.uid)
           .set(teacher.toMap());
 
-      print('✅ Enseignant inscrit: ${teacher.email}');
+      print('✅ Enseignant sauvegardé dans Firestore: ${teacher.email}');
+
+      // Attendre la synchronisation Firestore
+      await Future.delayed(const Duration(milliseconds: 500));
+
       return teacher;
+
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'email-already-in-use') {
-        throw Exception('Un compte avec cet email existe déjà.');
+      print('❌ FirebaseAuthException: ${e.code} - ${e.message}');
+      
+      switch (e.code) {
+        case 'email-already-in-use':
+          throw Exception('Un compte avec cet email existe déjà.');
+        case 'invalid-email':
+          throw Exception('L\'adresse email est invalide.');
+        case 'weak-password':
+          throw Exception('Le mot de passe est trop faible (minimum 6 caractères).');
+        case 'operation-not-allowed':
+          throw Exception('L\'authentification par email/mot de passe n\'est pas activée.');
+        default:
+          throw Exception('Erreur d\'authentification: ${e.code}');
       }
-      throw Exception(_getAuthErrorMessage(e.code));
     } catch (e) {
-      throw Exception('Erreur d\'inscription enseignant: $e');
+      print('❌ Erreur inscription enseignant: $e');
+      throw Exception('Erreur d\'inscription: ${e.toString()}');
     }
   }
 
-  // INSCRIPTION PARENT
+  // INSCRIPTION PARENT - CORRIGÉE
   Future<UserModel> signUpParent({
     required String email,
     required String password,
@@ -173,23 +139,6 @@ class AuthService {
   }) async {
     try {
       print('👨‍👩‍👧‍👦 Inscription parent: $email');
-
-      // Vérifier d'abord si l'email existe déjà
-      try {
-        await _auth.signInWithEmailAndPassword(
-          email: email,
-          password: 'temporary_password',
-        );
-        throw Exception('Un compte avec cet email existe déjà.');
-      } on FirebaseAuthException catch (e) {
-        if (e.code == 'user-not-found') {
-          // Email disponible, continuer
-        } else if (e.code == 'wrong-password') {
-          throw Exception('Un compte avec cet email existe déjà.');
-        } else {
-          throw Exception(_getAuthErrorMessage(e.code));
-        }
-      }
 
       // Vérifier si l'élève existe
       DocumentSnapshot studentDoc = await _firestore
@@ -216,12 +165,20 @@ class AuthService {
         password: password,
       );
 
+      print('✅ Compte parent Firebase créé: ${result.user!.uid}');
+
+      // Attendre la synchronisation
+      await Future.delayed(const Duration(seconds: 1));
+      await result.user!.reload();
+
       // Lier le parent à l'élève
       await _firestore
           .collection('students')
           .doc(studentId)
           .update({
             'parentId': result.user!.uid,
+            'parentEmail': email,
+            'parentName': '$firstName $lastName',
             'updatedAt': DateTime.now().millisecondsSinceEpoch,
           });
 
@@ -241,14 +198,78 @@ class AuthService {
           .set(parent.toMap());
 
       print('✅ Parent inscrit: ${parent.email}');
+      
+      // Attendre la synchronisation
+      await Future.delayed(const Duration(milliseconds: 500));
+      
       return parent;
+
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'email-already-in-use') {
-        throw Exception('Un compte avec cet email existe déjà.');
+      print('❌ FirebaseAuthException: ${e.code} - ${e.message}');
+      
+      switch (e.code) {
+        case 'email-already-in-use':
+          throw Exception('Un compte avec cet email existe déjà.');
+        case 'invalid-email':
+          throw Exception('L\'adresse email est invalide.');
+        case 'weak-password':
+          throw Exception('Le mot de passe est trop faible (minimum 6 caractères).');
+        default:
+          throw Exception('Erreur d\'authentification: ${e.code}');
       }
+    } catch (e) {
+      print('❌ Erreur inscription parent: $e');
+      throw Exception('Erreur d\'inscription parent: ${e.toString()}');
+    }
+  }
+
+  // CONNEXION - CORRIGÉE
+  Future<UserModel?> signIn(String email, String password) async {
+    try {
+      // S'assurer d'être déconnecté avant de se connecter
+      if (_auth.currentUser != null) {
+        await forceSignOut();
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+
+      await _auth.setPersistence(Persistence.LOCAL);
+      
+      UserCredential result = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      
+      // Attendre la synchronisation
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      // Recharger l'utilisateur pour s'assurer des données fraîches
+      await result.user?.reload();
+      User? freshUser = _auth.currentUser;
+      
+      if (freshUser == null) {
+        throw Exception('Échec de la connexion');
+      }
+
+      // Récupérer les données utilisateur depuis Firestore avec timeout
+      DocumentSnapshot userDoc = await _firestore
+          .collection('users')
+          .doc(freshUser.uid)
+          .get()
+          .timeout(const Duration(seconds: 10));
+      
+      if (userDoc.exists) {
+        final userData = userDoc.data() as Map<String, dynamic>;
+        final userModel = UserModel.fromMap(userData);
+        print('✅ Utilisateur connecté: ${userModel.email} - Rôle: ${userModel.role}');
+        return userModel;
+      }
+      
+      throw Exception('Profil utilisateur non trouvé');
+      
+    } on FirebaseAuthException catch (e) {
       throw Exception(_getAuthErrorMessage(e.code));
     } catch (e) {
-      throw Exception('Erreur d\'inscription parent: $e');
+      throw Exception('Erreur de connexion: $e');
     }
   }
 
@@ -261,31 +282,36 @@ class AuthService {
     }
   }
 
-  // VÉRIFIER L'UTILISATEUR ACTUEL AVEC DONNÉES FRAÎCHES
+  // VÉRIFIER L'UTILISATEUR ACTUEL - CORRIGÉE
   Future<UserModel?> getCurrentUser() async {
     try {
       User? firebaseUser = _auth.currentUser;
       
       if (firebaseUser != null) {
-        print('🔍 Vérification utilisateur actuel: ${firebaseUser.uid}');
+        print('🔍 Vérification utilisateur Firebase: ${firebaseUser.uid}');
         
         // Recharger pour s'assurer des données à jour
         await firebaseUser.reload();
         firebaseUser = _auth.currentUser;
         
         if (firebaseUser != null) {
-          DocumentSnapshot userDoc = await _firestore
+          print('📊 Récupération données Firestore pour: ${firebaseUser.uid}');
+          
+          // Ajouter un timeout pour éviter les blocages
+          final userDoc = await _firestore
               .collection('users')
               .doc(firebaseUser.uid)
-              .get();
+              .get()
+              .timeout(const Duration(seconds: 10));
           
           if (userDoc.exists) {
             final userData = userDoc.data() as Map<String, dynamic>;
             final userModel = UserModel.fromMap(userData);
-            print('✅ Utilisateur actuel: ${userModel.email} - Rôle: ${userModel.role}');
+            print('✅ Utilisateur trouvé: ${userModel.email} - Rôle: ${userModel.role}');
             return userModel;
           } else {
-            print('❌ Données Firestore non trouvées pour l\'utilisateur');
+            print('❌ Données Firestore non trouvées pour l\'utilisateur ${firebaseUser.uid}');
+            return null;
           }
         }
       } else {
