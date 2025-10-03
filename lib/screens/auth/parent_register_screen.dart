@@ -21,35 +21,47 @@ class _ParentRegisterScreenState extends State<ParentRegisterScreen> {
   bool _isLoading = false;
 
   Future<void> _registerParent() async {
-    if (!_formKey.currentState!.validate()) return;
+  if (!_formKey.currentState!.validate()) return;
 
-    if (_passwordController.text != _confirmPasswordController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Les mots de passe ne correspondent pas')),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      final user = await AuthService().signUpParent(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-        firstName: _firstNameController.text.trim(),
-        lastName: _lastNameController.text.trim(),
-        studentId: _studentCodeController.text.trim(),
-      );
-      
-      Provider.of<UserProvider>(context, listen: false).setUser(user);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
-    } finally {
-      setState(() => _isLoading = false);
-    }
+  if (_passwordController.text != _confirmPasswordController.text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Les mots de passe ne correspondent pas')),
+    );
+    return;
   }
+
+  final userProvider = Provider.of<UserProvider>(context, listen: false);
+  userProvider.setLoading(true);
+
+  try {
+    final user = await AuthService().signUpParent(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+      firstName: _firstNameController.text.trim(),
+      lastName: _lastNameController.text.trim(),
+      studentId: _studentCodeController.text.trim(),
+    );
+    
+    userProvider.setUser(user);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Compte parent créé avec succès !'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  } catch (e) {
+    userProvider.setError(e.toString());
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(e.toString()),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  }
+}
 
   @override
   Widget build(BuildContext context) {

@@ -38,12 +38,28 @@ class _TeacherHomeState extends State<TeacherHome> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               try {
-                // Nettoyer le provider d'abord
-                Provider.of<UserProvider>(context, listen: false).clearUser();
-
-                // Puis déconnecter
+                // Déconnecter d'abord de Firebase
                 await AuthService().signOut();
+
+                // Puis nettoyer le provider
+                if (mounted) {
+                  Provider.of<UserProvider>(context, listen: false).signOut();
+                }
+
+                // Message de confirmation
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Déconnexion réussie'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
               } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Erreur: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
                 print('Erreur déconnexion: $e');
               }
             },
