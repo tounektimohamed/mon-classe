@@ -36,7 +36,17 @@ class _TeacherHomeState extends State<TeacherHome> {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => AuthService().signOut(),
+            onPressed: () async {
+              try {
+                // Nettoyer le provider d'abord
+                Provider.of<UserProvider>(context, listen: false).clearUser();
+
+                // Puis déconnecter
+                await AuthService().signOut();
+              } catch (e) {
+                print('Erreur déconnexion: $e');
+              }
+            },
           ),
         ],
       ),

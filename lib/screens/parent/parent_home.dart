@@ -32,7 +32,7 @@ class _ParentHomeState extends State<ParentHome> {
   Future<void> _loadStudentData() async {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final user = userProvider.user;
-    
+
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('students')
@@ -66,7 +66,17 @@ class _ParentHomeState extends State<ParentHome> {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => AuthService().signOut(),
+            onPressed: () async {
+              try {
+                // Nettoyer le provider d'abord
+                Provider.of<UserProvider>(context, listen: false).clearUser();
+
+                // Puis déconnecter
+                await AuthService().signOut();
+              } catch (e) {
+                print('Erreur déconnexion: $e');
+              }
+            },
           ),
         ],
       ),
@@ -83,9 +93,7 @@ class _ParentHomeState extends State<ParentHome> {
           fontWeight: FontWeight.w600,
           fontSize: 12,
         ),
-        unselectedLabelStyle: TextStyle(
-          fontSize: 11,
-        ),
+        unselectedLabelStyle: TextStyle(fontSize: 11),
         type: BottomNavigationBarType.fixed,
         elevation: 8,
         items: const [
@@ -93,14 +101,8 @@ class _ParentHomeState extends State<ParentHome> {
             icon: Icon(Icons.announcement),
             label: 'Annonces',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.message),
-            label: 'Messages',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profil',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.message), label: 'Messages'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
         ],
       ),
     );
@@ -182,7 +184,11 @@ class ParentProfileTab extends StatelessWidget {
   final UserModel user;
   final Student student;
 
-  const ParentProfileTab({super.key, required this.user, required this.student});
+  const ParentProfileTab({
+    super.key,
+    required this.user,
+    required this.student,
+  });
 
   @override
   Widget build(BuildContext context) {

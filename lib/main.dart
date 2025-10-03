@@ -1,6 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:mon_classe_manegment/firebase_options.dart';
+import 'package:mon_classe_manegment/models/user_model.dart';
 import 'package:mon_classe_manegment/screens/parent/parent_home.dart';
 import 'package:mon_classe_manegment/screens/teacher/teacher_home.dart';
 import 'package:mon_classe_manegment/services/auth_service.dart';
@@ -10,9 +11,7 @@ import 'screens/auth/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp();
   runApp(const MyApp());
 }
 
@@ -34,12 +33,17 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class AuthWrapper extends StatelessWidget {
+class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
 
   @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  @override
   Widget build(BuildContext context) {
-    return StreamBuilder(
+    return StreamBuilder<User?>(
       stream: AuthService().authStateChanges,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -48,9 +52,42 @@ class AuthWrapper extends StatelessWidget {
           );
         }
         
-        if (snapshot.hasData) {
-          return const RoleBasedHome();
+        if (snapshot.hasData && snapshot.data != null) {
+          return FutureBuilder<UserModel?>(
+            future: AuthService().getCurrentUser(),
+            builder: (context, userSnapshot) {
+              if (userSnapshot.connectionState == ConnectionState.waiting) {
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
+              
+              if (userSnapshot.hasData && userSnapshot.data != null) {
+                // Mettre à jour le provider avec l'utilisateur actuel
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  Provider.of<UserProvider>(context, listen: false)
+                      .setUser(userSnapshot.data!);
+                });
+                
+                return RoleBasedHome(user: userSnapshot.data!);
+              }
+              
+              // Si pas d'utilisateur dans Firestore mais connecté à Firebase
+              // Cela peut arriver, on déconnecte
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                AuthService().signOut();
+                Provider.of<UserProvider>(context, listen: false).clearUser();
+              });
+              
+              return const LoginScreen();
+            },
+          );
         }
+        
+        // Pas connecté
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Provider.of<UserProvider>(context, listen: false).clearUser();
+        });
         
         return const LoginScreen();
       },
@@ -59,17 +96,23 @@ class AuthWrapper extends StatelessWidget {
 }
 
 class RoleBasedHome extends StatelessWidget {
-  const RoleBasedHome({super.key});
+  final UserModel user;
+
+  const RoleBasedHome({super.key, required this.user});
 
   @override
   Widget build(BuildContext context) {
-    final userProvider = Provider.of<UserProvider>(context);
-    
-    if (userProvider.user?.role == 'teacher') {
+    // Vérifier le rôle et rediriger
+    if (user.role == 'teacher') {
       return const TeacherHome();
-    } else if (userProvider.user?.role == 'parent') {
+    } else if (user.role == 'parent') {
       return const ParentHome();
     } else {
+      // Si rôle inconnu, déconnecter
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        AuthService().signOut();
+        Provider.of<UserProvider>(context, listen: false).clearUser();
+      });
       return const LoginScreen();
     }
   }
