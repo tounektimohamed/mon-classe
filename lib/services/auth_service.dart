@@ -26,7 +26,7 @@ class AuthService {
     }
   }
 
-  // INSCRIPTION ENSEIGNANT - CORRIGÉE
+  // INSCRIPTION ENSEIGNANT - CORRIGÉE POUR MULTIPLES CLASSES
   Future<UserModel> signUpTeacher({
     required String email,
     required String password,
@@ -73,25 +73,30 @@ class AuthService {
       }
 
       // Créer une nouvelle classe
-      DocumentReference classRef = await _firestore.collection('classes').add({
+      DocumentReference classRef = _firestore.collection('classes').doc();
+      await classRef.set({
+        'id': classRef.id,
         'name': classNameFinal,
         'schoolName': schoolName,
         'teacherId': result.user!.uid,
         'teacherEmail': email,
         'teacherName': '$firstName $lastName',
+        'description': 'Classe créée par $firstName $lastName',
         'createdAt': DateTime.now().millisecondsSinceEpoch,
+        'studentIds': [],
+        'subject': '',
       });
 
       print('✅ Classe créée: ${classRef.id}');
 
-      // Créer le profil enseignant
+      // Créer le profil enseignant avec classIds comme liste
       UserModel teacher = UserModel(
         uid: result.user!.uid,
         email: email,
         firstName: firstName,
         lastName: lastName,
         role: 'teacher',
-        classId: classRef.id,
+        classIds: [classRef.id], // ← CHANGEMENT : Liste au lieu d'un seul ID
         createdAt: DateTime.now(),
       );
 
@@ -130,99 +135,123 @@ class AuthService {
   }
 
   // INSCRIPTION PARENT - CORRIGÉE
-  Future<UserModel> signUpParent({
-    required String email,
-    required String password,
-    required String firstName,
-    required String lastName,
-    required String studentId,
-  }) async {
-    try {
-      print('👨‍👩‍👧‍👦 Inscription parent: $email');
+  // services/auth_service.dart - Modifiez la méthode signUpParent
+Future<UserModel> signUpParent({
+  required String email,
+  required String password,
+  required String firstName,
+  required String lastName,
+  required String studentCode, // ← CHANGEMENT : studentCode au lieu de studentId
+}) async {
+  try {
+    print('👨‍👩‍👧‍👦 Inscription parent avec code: $studentCode');
 
-      // Vérifier si l'élève existe
-      DocumentSnapshot studentDoc = await _firestore
-          .collection('students')
-          .doc(studentId)
-          .get();
+    // 1. Vérifier si le code existe dans student_codes
+    final codeSnapshot = await _firestore
+        .collection('student_codes')
+        .where('code', isEqualTo: studentCode)
+        .get();
 
-      if (!studentDoc.exists) {
-        throw Exception('Code élève invalide. Vérifiez le code et réessayez.');
-      }
-
-      // Vérifier si l'élève a déjà un parent
-      final studentData = studentDoc.data() as Map<String, dynamic>?;
-      if (studentData != null && studentData['parentId'] != null) {
-        throw Exception('Cet élève est déjà associé à un compte parent.');
-      }
-
-      // Configurer la persistance
-      await _auth.setPersistence(Persistence.LOCAL);
-
-      // Créer le compte utilisateur
-      UserCredential result = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      print('✅ Compte parent Firebase créé: ${result.user!.uid}');
-
-      // Attendre la synchronisation
-      await Future.delayed(const Duration(seconds: 1));
-      await result.user!.reload();
-
-      // Lier le parent à l'élève
-      await _firestore
-          .collection('students')
-          .doc(studentId)
-          .update({
-            'parentId': result.user!.uid,
-            'parentEmail': email,
-            'parentName': '$firstName $lastName',
-            'updatedAt': DateTime.now().millisecondsSinceEpoch,
-          });
-
-      // Créer le profil parent
-      UserModel parent = UserModel(
-        uid: result.user!.uid,
-        email: email,
-        firstName: firstName,
-        lastName: lastName,
-        role: 'parent',
-        createdAt: DateTime.now(),
-      );
-
-      await _firestore
-          .collection('users')
-          .doc(result.user!.uid)
-          .set(parent.toMap());
-
-      print('✅ Parent inscrit: ${parent.email}');
-      
-      // Attendre la synchronisation
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      return parent;
-
-    } on FirebaseAuthException catch (e) {
-      print('❌ FirebaseAuthException: ${e.code} - ${e.message}');
-      
-      switch (e.code) {
-        case 'email-already-in-use':
-          throw Exception('Un compte avec cet email existe déjà.');
-        case 'invalid-email':
-          throw Exception('L\'adresse email est invalide.');
-        case 'weak-password':
-          throw Exception('Le mot de passe est trop faible (minimum 6 caractères).');
-        default:
-          throw Exception('Erreur d\'authentification: ${e.code}');
-      }
-    } catch (e) {
-      print('❌ Erreur inscription parent: $e');
-      throw Exception('Erreur d\'inscription parent: ${e.toString()}');
+    if (codeSnapshot.docs.isEmpty) {
+      throw Exception('Code élève invalide. Vérifiez le code et réessayez.');
     }
-  }
 
+    final codeData = codeSnapshot.docs.first.data();
+    final studentId = codeData['studentId'];
+    
+    print('✅ Code valide trouvé pour l\'élève: $studentId');
+
+    // 2. Vérifier si l'élève existe
+    final studentDoc = await _firestore
+        .collection('students')
+        .doc(studentId)
+        .get();
+
+    if (!studentDoc.exists) {
+      throw Exception('Élève non trouvé. Contactez l\'enseignant.');
+    }
+
+    // 3. Vérifier si l'élève a déjà un parent
+    final studentData = studentDoc.data()!;
+    if (studentData['parentId'] != null) {
+      throw Exception('Cet élève est déjà associé à un compte parent.');
+    }
+
+    // 4. Configurer la persistance
+    await _auth.setPersistence(Persistence.LOCAL);
+
+    // 5. Créer le compte utilisateur
+    UserCredential result = await _auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+
+    print('✅ Compte parent Firebase créé: ${result.user!.uid}');
+
+    // 6. Attendre la synchronisation
+    await Future.delayed(const Duration(seconds: 1));
+    await result.user!.reload();
+
+    // 7. Lier le parent à l'élève
+    await _firestore
+        .collection('students')
+        .doc(studentId)
+        .update({
+          'parentId': result.user!.uid,
+          'parentEmail': email,
+          'parentName': '$firstName $lastName',
+          'updatedAt': DateTime.now().millisecondsSinceEpoch,
+        });
+
+    // 8. Supprimer le code utilisé (optionnel - pour éviter la réutilisation)
+    await _firestore
+        .collection('student_codes')
+        .doc(codeSnapshot.docs.first.id)
+        .delete();
+
+    print('✅ Code utilisé supprimé: $studentCode');
+
+    // 9. Créer le profil parent
+    UserModel parent = UserModel(
+      uid: result.user!.uid,
+      email: email,
+      firstName: firstName,
+      lastName: lastName,
+      role: 'parent',
+      classIds: [studentData['classId']], // ← IMPORTANT : Ajouter classId
+      createdAt: DateTime.now(),
+    );
+
+    await _firestore
+        .collection('users')
+        .doc(result.user!.uid)
+        .set(parent.toMap());
+
+    print('✅ Parent inscrit: ${parent.email}');
+    
+    // 10. Attendre la synchronisation
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    return parent;
+
+  } on FirebaseAuthException catch (e) {
+    print('❌ FirebaseAuthException: ${e.code} - ${e.message}');
+    
+    switch (e.code) {
+      case 'email-already-in-use':
+        throw Exception('Un compte avec cet email existe déjà.');
+      case 'invalid-email':
+        throw Exception('L\'adresse email est invalide.');
+      case 'weak-password':
+        throw Exception('Le mot de passe est trop faible (minimum 6 caractères).');
+      default:
+        throw Exception('Erreur d\'authentification: ${e.code}');
+    }
+  } catch (e) {
+    print('❌ Erreur inscription parent: $e');
+    throw Exception('Erreur d\'inscription parent: ${e.toString()}');
+  }
+}
   // CONNEXION - CORRIGÉE
   Future<UserModel?> signIn(String email, String password) async {
     try {
@@ -261,6 +290,7 @@ class AuthService {
         final userData = userDoc.data() as Map<String, dynamic>;
         final userModel = UserModel.fromMap(userData);
         print('✅ Utilisateur connecté: ${userModel.email} - Rôle: ${userModel.role}');
+        print('📚 Classes de l\'enseignant: ${userModel.classIds}');
         return userModel;
       }
       
@@ -308,6 +338,7 @@ class AuthService {
             final userData = userDoc.data() as Map<String, dynamic>;
             final userModel = UserModel.fromMap(userData);
             print('✅ Utilisateur trouvé: ${userModel.email} - Rôle: ${userModel.role}');
+            print('📚 Classes: ${userModel.classIds}');
             return userModel;
           } else {
             print('❌ Données Firestore non trouvées pour l\'utilisateur ${firebaseUser.uid}');
@@ -339,6 +370,58 @@ class AuthService {
     } catch (e) {
       print('❌ Erreur getUserById: $e');
       return null;
+    }
+  }
+
+   // CRÉER UNE NOUVELLE CLASSE (pour enseignants existants)
+  Future<void> createNewClass({
+    required String teacherId,
+    required String teacherName,
+    required String teacherEmail,
+    required String className,
+    required String schoolName,
+    String description = '',
+    String subject = '',
+  }) async {
+    try {
+      // Vérifier si une classe avec le même nom existe déjà
+      final existingClassQuery = await _firestore
+          .collection('classes')
+          .where('schoolName', isEqualTo: schoolName)
+          .where('name', isEqualTo: className)
+          .get();
+
+      if (existingClassQuery.docs.isNotEmpty) {
+        throw Exception('Une classe avec ce nom existe déjà dans cette école.');
+      }
+
+      // Créer une nouvelle classe
+      DocumentReference classRef = _firestore.collection('classes').doc();
+      await classRef.set({
+        'id': classRef.id,
+        'name': className,
+        'description': description,
+        'schoolName': schoolName,
+        'teacherId': teacherId,
+        'teacherEmail': teacherEmail,
+        'teacherName': teacherName,
+        'subject': subject,
+        'createdAt': DateTime.now().millisecondsSinceEpoch,
+        'studentIds': [],
+      });
+
+      // AJOUTER L'ID DE LA CLASSE À LA LISTE DE L'ENSEIGNANT
+      await _firestore
+          .collection('users')
+          .doc(teacherId)
+          .update({
+            'classIds': FieldValue.arrayUnion([classRef.id])
+          });
+
+      print('✅ Nouvelle classe créée: $className (ID: ${classRef.id})');
+    } catch (e) {
+      print('❌ Erreur création classe: $e');
+      rethrow;
     }
   }
 

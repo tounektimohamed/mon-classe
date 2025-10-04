@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mon_classe_manegment/models/class_model.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../models/announcement_model.dart';
@@ -7,7 +8,9 @@ import '../../services/firestore_service.dart';
 import '../../services/storage_service.dart';
 
 class CreateAnnouncementScreen extends StatefulWidget {
-  const CreateAnnouncementScreen({super.key});
+  final String classId;
+
+  const CreateAnnouncementScreen({super.key, required this.classId});
 
   @override
   State<CreateAnnouncementScreen> createState() => _CreateAnnouncementScreenState();
@@ -50,8 +53,8 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
     try {
       final user = Provider.of<UserProvider>(context, listen: false).user;
       
-      if (user == null || user.classId == null) {
-        throw Exception('Utilisateur ou classe non trouvée');
+      if (user == null) {
+        throw Exception('Utilisateur non trouvé');
       }
 
       // Créer l'ID de l'annonce
@@ -71,22 +74,15 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
         );
       }
 
-      // Créer l'annonce avec les URLs des fichiers
-      final announcement = Announcement(
-        id: announcementId,
-        classId: user.classId!,
-        authorId: user.uid,
-        authorName: '${user.firstName} ${user.lastName}',
+      // Utiliser la nouvelle méthode qui prend classId en paramètre
+      await _firestoreService.createAnnouncement(
+        classId: widget.classId,
         title: _titleController.text.trim(),
         content: _contentController.text.trim(),
-        timestamp: DateTime.now(),
+        authorId: user.uid,
+        authorName: '${user.firstName} ${user.lastName}',
         attachments: _uploadedFiles.map((file) => file['url'] as String).toList(),
-        reactions: [],
-        comments: [],
       );
-
-      // Sauvegarder l'annonce dans Firestore
-      await _firestoreService.createAnnouncement(announcement);
 
       _showSuccess('Annonce publiée avec succès');
       Navigator.pop(context);
@@ -202,12 +198,31 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
                 key: _formKey,
                 child: ListView(
                   children: [
-                    // En-tête
-                    Text(
-                      'Créer une annonce',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    // En-tête avec info de la classe
+                    StreamBuilder<ClassModel?>(
+                      stream: FirestoreService().getClassStream(widget.classId),
+                      builder: (context, snapshot) {
+                        final className = snapshot.data?.name ?? 'Chargement...';
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Créer une annonce',
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Pour la classe: $className',
+                              style: TextStyle(
+                                color: Colors.blue[600],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -389,7 +404,7 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Cette annonce sera visible par tous les parents de votre classe',
+                                'Cette annonce sera visible par tous les parents de cette classe',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.blue[800],

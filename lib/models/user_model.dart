@@ -1,3 +1,4 @@
+// models/user_model.dart
 class UserModel {
   final String uid;
   final String email;
@@ -5,7 +6,7 @@ class UserModel {
   final String lastName;
   final String role; // 'teacher' or 'parent'
   final String? profileImageUrl;
-  final String? classId; // For teachers
+  final List<String> classIds; // ← CHANGEMENT : Liste d'IDs de classes
   final DateTime createdAt;
 
   UserModel({
@@ -15,7 +16,7 @@ class UserModel {
     required this.lastName,
     required this.role,
     this.profileImageUrl,
-    this.classId,
+    required this.classIds, // ← CHANGEMENT
     required this.createdAt,
   });
 
@@ -27,7 +28,7 @@ class UserModel {
       'lastName': lastName,
       'role': role,
       'profileImageUrl': profileImageUrl,
-      'classId': classId,
+      'classIds': classIds, // ← CHANGEMENT
       'createdAt': createdAt.millisecondsSinceEpoch,
     };
   }
@@ -40,8 +41,14 @@ class UserModel {
       lastName: map['lastName'] ?? '',
       role: map['role'] ?? '',
       profileImageUrl: map['profileImageUrl'],
-      classId: map['classId'],
-      createdAt: DateTime.fromMillisecondsSinceEpoch(map['createdAt']),
+      classIds: List<String>.from(map['classIds'] ?? []), // ← CHANGEMENT
+      createdAt: DateTime.fromMillisecondsSinceEpoch(map['createdAt'] ?? 0),
     );
   }
+
+  // Méthode utilitaire pour vérifier si l'utilisateur a des classes
+  bool get hasClasses => classIds.isNotEmpty;
+  
+  // Pour la rétrocompatibilité (si vous avez encore du code qui utilise classId)
+  String? get classId => classIds.isNotEmpty ? classIds.first : null;
 }

@@ -33,20 +33,16 @@ class _LoginScreenState extends State<LoginScreen> {
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
-      
+
       // La redirection se fera automatiquement via l'AuthWrapper
-      
     } catch (e) {
       String errorMessage = e.toString().replaceAll('Exception: ', '');
       setState(() {
         _errorMessage = errorMessage;
       });
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMessage),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) {
@@ -58,26 +54,35 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Padding(
+      body: SingleChildScrollView( // ✅ permet le scroll sur petits écrans
         padding: const EdgeInsets.all(24.0),
         child: Form(
           key: _formKey,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-               Image.asset(
+              const SizedBox(height: 60), // pour espacer depuis le haut
+              Image.asset(
                 'assets/images/lojo.png',
-                width: 130,  // Augmenté de 80 à 120
-                height: 130, // Augmenté de 80 à 120
+                width: 130,
+                height: 130,
                 fit: BoxFit.contain,
               ),
               const SizedBox(height: 5),
               const Text(
-                ' Jousour',
+                'Jousour',
                 style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
                   color: Colors.blue,
+                ),
+              ),
+              const Text(
+                'التعليمُ جسرٌ نبنيه معًا',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey,
+                  fontStyle: FontStyle.italic,
                 ),
               ),
               const SizedBox(height: 8),
@@ -86,7 +91,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: TextStyle(fontSize: 16, color: Colors.grey),
               ),
               const SizedBox(height: 32),
-              
+
               if (_errorMessage != null)
                 Container(
                   width: double.infinity,
@@ -110,7 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                 ),
-              
+
               TextFormField(
                 controller: _emailController,
                 decoration: const InputDecoration(
@@ -215,6 +220,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 40), // espace bas de page
             ],
           ),
         ),

@@ -23,8 +23,8 @@ class _TeacherMessagingTabState extends State<TeacherMessagingTab> {
         .where('participants', arrayContains: teacherId)
         .snapshots()
         .asyncMap((snapshot) async {
-      final conversations = <String, Map<String, dynamic>>{}; // ✅ Correction: Map au lieu de Set
-      final seenConversations = <String>{}; // Pour tracker les conversations déjà traitées
+      final conversations = <String, Map<String, dynamic>>{};
+      final seenConversations = <String>{};
 
       for (final doc in snapshot.docs) {
         final message = Message.fromMap(doc.data() as Map<String, dynamic>);
@@ -32,12 +32,11 @@ class _TeacherMessagingTabState extends State<TeacherMessagingTab> {
             ? message.receiverId 
             : message.senderId;
 
-        // Clé unique pour chaque conversation
         final conversationKey = '${teacherId}_$otherUserId';
         
         // Si on a déjà une conversation plus récente, on skip
         if (seenConversations.contains(conversationKey)) {
-          final existingConversation = conversations[conversationKey]; // ✅ Correction: Maintenant valide
+          final existingConversation = conversations[conversationKey];
           if (existingConversation != null) {
             final existingMessage = existingConversation['lastMessage'] as Message;
             if (existingMessage.timestamp.isAfter(message.timestamp)) {
@@ -54,23 +53,26 @@ class _TeacherMessagingTabState extends State<TeacherMessagingTab> {
           if (userDoc.exists) {
             final user = UserModel.fromMap(userDoc.data() as Map<String, dynamic>);
             
-            // Récupérer l'élève associé
-            final studentQuery = await _firestore
-                .collection('students')
-                .where('parentId', isEqualTo: otherUserId)
-                .get();
-            
-            if (studentQuery.docs.isNotEmpty) {
-              final student = Student.fromMap(studentQuery.docs.first.data());
+            // Vérifier que c'est un parent
+            if (user.role == 'parent') {
+              // Récupérer l'élève associé à ce parent
+              final studentQuery = await _firestore
+                  .collection('students')
+                  .where('parentId', isEqualTo: otherUserId)
+                  .get();
               
-              final unreadCount = await _getUnreadCount(teacherId, otherUserId);
-              
-              conversations[conversationKey] = { // ✅ Correction: Maintenant valide
-                'parent': user,
-                'student': student,
-                'lastMessage': message,
-                'unreadCount': unreadCount,
-              };
+              if (studentQuery.docs.isNotEmpty) {
+                final student = Student.fromMap(studentQuery.docs.first.data());
+                
+                final unreadCount = await _getUnreadCount(teacherId, otherUserId);
+                
+                conversations[conversationKey] = {
+                  'parent': user,
+                  'student': student,
+                  'lastMessage': message,
+                  'unreadCount': unreadCount,
+                };
+              }
             }
           }
         } catch (e) {
@@ -79,7 +81,7 @@ class _TeacherMessagingTabState extends State<TeacherMessagingTab> {
       }
 
       // Convertir en liste et trier par timestamp du dernier message
-      final conversationList = conversations.values.toList(); // ✅ Correction: Maintenant valide
+      final conversationList = conversations.values.toList();
       conversationList.sort((a, b) {
         final lastMessageA = a['lastMessage'] as Message;
         final lastMessageB = b['lastMessage'] as Message;
@@ -118,6 +120,10 @@ class _TeacherMessagingTabState extends State<TeacherMessagingTab> {
   Widget build(BuildContext context) {
     final user = Provider.of<UserProvider>(context).user;
 
+    if (user == null) {
+      return const Center(child: Text('Utilisateur non connecté'));
+    }
+
     return Column(
       children: [
         Padding(
@@ -135,14 +141,26 @@ class _TeacherMessagingTabState extends State<TeacherMessagingTab> {
         ),
         Expanded(
           child: StreamBuilder<List<Map<String, dynamic>>>(
-            stream: _getConversations(user!.uid),
+            stream: _getConversations(user.uid),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
 
               if (snapshot.hasError) {
-                return Center(child: Text('Erreur: ${snapshot.error}'));
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Erreur: ${snapshot.error}',
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                );
               }
 
               final conversations = snapshot.data ?? [];
@@ -188,8 +206,10 @@ class _TeacherMessagingTabState extends State<TeacherMessagingTab> {
                         context,
                         MaterialPageRoute(
                           builder: (context) => ChatScreen(
-                            otherUser: parent,
-                            student: student,
+                            otherUserId: parent.uid, // ← CORRECTION ICI
+                            otherUserName: '${parent.firstName} ${parent.lastName}',
+                            otherUserRole: parent.role,
+                            student: student, // ← CORRECTION ICI
                             currentUserId: user.uid,
                           ),
                         ),
@@ -226,11 +246,12 @@ class ConversationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      elevation: 2,
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: Theme.of(context).primaryColor,
           child: Text(
-            parent.firstName[0],
+            parent.firstName.isNotEmpty ? parent.firstName[0] : 'P',
             style: const TextStyle(color: Colors.white),
           ),
         ),
@@ -268,7 +289,7 @@ class ConversationTile extends StatelessWidget {
                 radius: 12,
                 backgroundColor: Colors.red,
                 child: Text(
-                  unreadCount.toString(),
+                  unreadCount > 9 ? '9+' : unreadCount.toString(),
                   style: const TextStyle(
                     color: Colors.white, 
                     fontSize: 10,
@@ -297,6 +318,6 @@ class ConversationTile extends StatelessWidget {
   }
 
   String _formatHour(DateTime date) {
-    return '${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+    return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
   }
 }
