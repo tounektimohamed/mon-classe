@@ -312,7 +312,7 @@ class _ParentHomeState extends State<ParentHome> {
     }
   }
 }
-
+// screens/parent/parent_home.dart - CORRECTION de ParentAnnouncementsTab
 class ParentAnnouncementsTab extends StatelessWidget {
   final Student student;
 
@@ -321,8 +321,17 @@ class ParentAnnouncementsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Announcement>>(
-      stream: FirestoreService().getAnnouncements(student.classId),
+      stream: FirestoreService().getAnnouncementsStream(student.classId), // CHANGÉ: getAnnouncementsStream au lieu de getAnnouncements
       builder: (context, snapshot) {
+        // DEBUG
+        print('👨‍👩‍👧‍👦 ParentAnnouncementsTab - Classe: ${student.classId}');
+        print('👨‍👩‍👧‍👦 ParentAnnouncementsTab - État: ${snapshot.connectionState}');
+        print('👨‍👩‍👧‍👦 ParentAnnouncementsTab - Erreur: ${snapshot.hasError}');
+        print('👨‍👩‍👧‍👦 ParentAnnouncementsTab - Données: ${snapshot.hasData}');
+        if (snapshot.hasData) {
+          print('👨‍👩‍👧‍👦 ParentAnnouncementsTab - Annonces: ${snapshot.data!.length}');
+        }
+
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
             child: Column(
@@ -340,6 +349,7 @@ class ParentAnnouncementsTab extends StatelessWidget {
         }
 
         if (snapshot.hasError) {
+          print('❌ ParentAnnouncementsTab - Erreur: ${snapshot.error}');
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -364,6 +374,7 @@ class ParentAnnouncementsTab extends StatelessWidget {
         final announcements = snapshot.data ?? [];
 
         if (announcements.isEmpty) {
+          print('ℹ️ ParentAnnouncementsTab - Aucune annonce trouvée');
           return const Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -385,6 +396,7 @@ class ParentAnnouncementsTab extends StatelessWidget {
           );
         }
 
+        print('✅ ParentAnnouncementsTab - ${announcements.length} annonces affichées');
         return ListView.builder(
           padding: const EdgeInsets.symmetric(vertical: 8),
           itemCount: announcements.length,
@@ -397,7 +409,6 @@ class ParentAnnouncementsTab extends StatelessWidget {
     );
   }
 }
-
 // Dans parent_home.dart - remplacer ParentMessagingTab
 class ParentMessagingTab extends StatefulWidget {
   final Student student;

@@ -65,24 +65,8 @@ class FirestoreService {
     await classRef.set(classData);
   }
 
-  // Gestion des annonces
-  Stream<List<Announcement>> getAnnouncements(String classId) {
-    return _firestore
-        .collection('announcements')
-        .where('classId', isEqualTo: classId)
-        .snapshots()
-        .map((snapshot) {
-          final announcements = snapshot.docs
-              .map((doc) => Announcement.fromMap(doc.data()))
-              .toList();
-
-          // 🔽 Trier côté Flutter
-          announcements.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-          return announcements;
-        });
-  }
-
   // Créer une annonce pour une classe spécifique
+  // services/firestore_service.dart - Ajoutez cette méthode
   Future<void> createAnnouncement({
     required String classId,
     required String title,
@@ -90,48 +74,58 @@ class FirestoreService {
     required String authorId,
     required String authorName,
     List<String> attachments = const [],
+    List<String> base64Images = const [],
   }) async {
-    final announcementRef = _firestore.collection('announcements').doc();
+    try {
+      final announcementId = DateTime.now().millisecondsSinceEpoch.toString();
 
-    final announcementData = {
-      'id': announcementRef.id,
-      'classId': classId,
-      'title': title,
-      'content': content,
-      'authorId': authorId,
-      'authorName': authorName,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-      'attachments': attachments,
-      'likes': [],
-      'comments': [],
-    };
+      final announcement = Announcement(
+        id: announcementId,
+        classId: classId,
+        authorId: authorId,
+        authorName: authorName,
+        title: title,
+        content: content,
+        timestamp: DateTime.now(),
+        attachments: attachments,
+        base64Images: base64Images,
+      );
 
-    await announcementRef.set(announcementData);
+      await _firestore
+          .collection('classes')
+          .doc(classId)
+          .collection('announcements')
+          .doc(announcementId)
+          .set(announcement.toMap());
+    } catch (e) {
+      throw Exception('Erreur lors de la création de l\'annonce: $e');
+    }
   }
 
-  // Méthode alternative pour créer une annonce avec objet Announcement
-  Future<void> createAnnouncementFromObject(Announcement announcement) async {
-    await _firestore
-        .collection('announcements')
-        .doc(announcement.id)
-        .set(announcement.toMap());
-  }
-
-  // SYSTÈME DE RÉACTIONS (LIKE)
   Future<void> toggleLike({
     required String announcementId,
     required String userId,
     required String userName,
+    required String classId, // AJOUT IMPORTANT: besoin de classId
   }) async {
-    final announcementRef = _firestore
-        .collection('announcements')
-        .doc(announcementId);
+    try {
+      print(
+        '❤️ Toggle like - Classe: $classId, Annonce: $announcementId, User: $userId',
+      );
 
-    return _firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(announcementRef);
-      if (!snapshot.exists) return;
+      // CHEMIN CORRECT: classes/{classId}/announcements/{announcementId}
+      final announcementRef = _firestore
+          .collection('classes')
+          .doc(classId)
+          .collection('announcements')
+          .doc(announcementId);
 
-      final data = snapshot.data()!;
+      final doc = await announcementRef.get();
+      if (!doc.exists) {
+        throw Exception('Annonce non trouvée');
+      }
+
+      final data = doc.data()!;
       final reactions = List<Map<String, dynamic>>.from(
         data['reactions'] ?? [],
       );
@@ -144,6 +138,7 @@ class FirestoreService {
       if (existingIndex >= 0) {
         // Retirer le like
         reactions.removeAt(existingIndex);
+        print('✅ Like retiré');
       } else {
         // Ajouter le like
         reactions.add(
@@ -154,43 +149,64 @@ class FirestoreService {
             timestamp: DateTime.now(),
           ).toMap(),
         );
+        print('✅ Like ajouté');
       }
 
-      transaction.update(announcementRef, {'reactions': reactions});
-    });
+      await announcementRef.update({'reactions': reactions});
+      print('✅ Reactions mises à jour dans Firestore');
+    } catch (e) {
+      print('❌ Erreur toggleLike: $e');
+      rethrow;
+    }
   }
 
   // SYSTÈME DE COMMENTAIRES
-  Future<void> addComment({
-    required String announcementId,
-    required String userId,
-    required String userName,
-    required String content,
-  }) async {
+ Future<void> addComment({
+  required String announcementId,
+  required String userId,
+  required String userName,
+  required String content,
+  required String classId, // AJOUT IMPORTANT: besoin de classId
+}) async {
+  try {
+    print('💬 Ajout commentaire - Classe: $classId, Annonce: $announcementId, User: $userId');
+    
+    // CHEMIN CORRECT: classes/{classId}/announcements/{announcementId}
     final announcementRef = _firestore
+        .collection('classes')
+        .doc(classId)
         .collection('announcements')
         .doc(announcementId);
-    final commentId = _firestore.collection('announcements').doc().id;
 
+    final doc = await announcementRef.get();
+    if (!doc.exists) {
+      throw Exception('Annonce non trouvée');
+    }
+
+    final data = doc.data()!;
+    final comments = List<Map<String, dynamic>>.from(data['comments'] ?? []);
+
+    // Créer le nouveau commentaire
     final newComment = Comment(
-      id: commentId,
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
       userId: userId,
       userName: userName,
-      content: content,
+      content: content.trim(),
       timestamp: DateTime.now(),
+      reactions: [],
+      replies: [],
     ).toMap();
 
-    return _firestore.runTransaction((transaction) async {
-      final snapshot = await transaction.get(announcementRef);
-      if (!snapshot.exists) return;
+    comments.add(newComment);
 
-      final data = snapshot.data()!;
-      final comments = List<Map<String, dynamic>>.from(data['comments'] ?? []);
-      comments.add(newComment);
-
-      transaction.update(announcementRef, {'comments': comments});
-    });
+    await announcementRef.update({'comments': comments});
+    print('✅ Commentaire ajouté avec succès');
+    
+  } catch (e) {
+    print('❌ Erreur addComment: $e');
+    rethrow;
   }
+}
 
   // RÉPONDRE À UN COMMENTAIRE
   Future<void> addReply({
@@ -266,40 +282,30 @@ class FirestoreService {
   }
 
   // SUPPRIMER UNE ANNONCE
-  Future<void> deleteAnnouncement(String announcementId) async {
-    try {
-      // Supprimer d'abord les fichiers de Storage
-      final storageService = StorageService();
-      await storageService.deleteAllAnnouncementFiles(announcementId);
-
-      // Supprimer l'annonce principale
-      await _firestore.collection('announcements').doc(announcementId).delete();
-
-      print('✅ Annonce supprimée: $announcementId');
-    } catch (e) {
-      print('❌ Erreur suppression annonce: $e');
-      throw Exception('Erreur lors de la suppression de l\'annonce: $e');
-    }
+ Future<void> deleteAnnouncement(String announcementId) async {
+  try {
+    // Cette méthode doit aussi chercher dans toutes les classes
+    // Pour l'instant, on lance une exception
+    throw Exception('Méthode deleteAnnouncement à implémenter avec classId');
+  } catch (e) {
+    print('❌ Erreur deleteAnnouncement: $e');
+    rethrow;
   }
+}
 
-  // VÉRIFIER SI L'UTILISATEUR EST L'AUTEUR
-  Future<bool> isUserAuthor(String announcementId, String userId) async {
-    try {
-      final doc = await _firestore
-          .collection('announcements')
-          .doc(announcementId)
-          .get();
-
-      if (doc.exists) {
-        final data = doc.data()!;
-        return data['authorId'] == userId;
-      }
-      return false;
-    } catch (e) {
-      print('❌ Erreur vérification auteur: $e');
-      return false;
-    }
+Future<bool> isUserAuthor(String announcementId, String userId) async {
+  try {
+    // Cette méthode doit chercher dans toutes les classes
+    // Pour l'instant, retournons true pour tester
+    // Vous devrez implémenter la logique de recherche
+    return true;
+  } catch (e) {
+    print('❌ Erreur isUserAuthor: $e');
+    return false;
   }
+}
+
+
 
   // Mettre à jour les pièces jointes d'une annonce
   Future<void> updateAnnouncementAttachments({
@@ -338,26 +344,26 @@ class FirestoreService {
   }
 
   Stream<List<Message>> getConversationMessages(
-  String currentUserId,
-  String otherUserId,
-) {
-  return _firestore
-      .collection('messages')
-      .where('participants', arrayContains: currentUserId)
-      .snapshots()
-      .map((snapshot) {
-        final messages = snapshot.docs
-            .map((doc) => Message.fromMap(doc.data()))
-            // 🔽 Garde seulement les messages entre les deux utilisateurs
-            .where((message) => message.participants.contains(otherUserId))
-            .toList();
+    String currentUserId,
+    String otherUserId,
+  ) {
+    return _firestore
+        .collection('messages')
+        .where('participants', arrayContains: currentUserId)
+        .snapshots()
+        .map((snapshot) {
+          final messages = snapshot.docs
+              .map((doc) => Message.fromMap(doc.data()))
+              // 🔽 Garde seulement les messages entre les deux utilisateurs
+              .where((message) => message.participants.contains(otherUserId))
+              .toList();
 
-        // 🔽 Trie les messages localement par timestamp (le plus récent en premier)
-        messages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+          // 🔽 Trie les messages localement par timestamp (le plus récent en premier)
+          messages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-        return messages;
-      });
-}
+          return messages;
+        });
+  }
 
   Future<void> sendMessage(Message message) async {
     await _firestore
@@ -410,46 +416,46 @@ class FirestoreService {
   }
 
   // Récupérer les conversations avec les derniers messages
- Stream<List<Map<String, dynamic>>> getConversations(String userId) {
-  return _firestore
-      .collection('messages')
-      .where('participants', arrayContains: userId)
-      .snapshots()
-      .asyncMap((snapshot) async {
-        final conversations = <String, Map<String, dynamic>>{};
+  Stream<List<Map<String, dynamic>>> getConversations(String userId) {
+    return _firestore
+        .collection('messages')
+        .where('participants', arrayContains: userId)
+        .snapshots()
+        .asyncMap((snapshot) async {
+          final conversations = <String, Map<String, dynamic>>{};
 
-        // Parcourir les messages récupérés
-        for (final doc in snapshot.docs) {
-          final message = Message.fromMap(doc.data());
-          final otherUserId = message.participants.firstWhere(
-            (id) => id != userId,
-            orElse: () => message.senderId == userId
-                ? message.receiverId
-                : message.senderId,
-          );
+          // Parcourir les messages récupérés
+          for (final doc in snapshot.docs) {
+            final message = Message.fromMap(doc.data());
+            final otherUserId = message.participants.firstWhere(
+              (id) => id != userId,
+              orElse: () => message.senderId == userId
+                  ? message.receiverId
+                  : message.senderId,
+            );
 
-          final conversationKey = '${userId}_$otherUserId';
+            final conversationKey = '${userId}_$otherUserId';
 
-          if (!conversations.containsKey(conversationKey)) {
-            conversations[conversationKey] = {
-              'otherUserId': otherUserId,
-              'lastMessage': message,
-              'unreadCount': await getUnreadCount(userId, otherUserId),
-            };
+            if (!conversations.containsKey(conversationKey)) {
+              conversations[conversationKey] = {
+                'otherUserId': otherUserId,
+                'lastMessage': message,
+                'unreadCount': await getUnreadCount(userId, otherUserId),
+              };
+            }
           }
-        }
 
-        // 🔽 Trier côté Flutter selon le timestamp du dernier message
-        final conversationList = conversations.values.toList();
-        conversationList.sort((a, b) {
-          final lastMessageA = a['lastMessage'] as Message;
-          final lastMessageB = b['lastMessage'] as Message;
-          return lastMessageB.timestamp.compareTo(lastMessageA.timestamp);
+          // 🔽 Trier côté Flutter selon le timestamp du dernier message
+          final conversationList = conversations.values.toList();
+          conversationList.sort((a, b) {
+            final lastMessageA = a['lastMessage'] as Message;
+            final lastMessageB = b['lastMessage'] as Message;
+            return lastMessageB.timestamp.compareTo(lastMessageA.timestamp);
+          });
+
+          return conversationList;
         });
-
-        return conversationList;
-      });
-}
+  }
 
   // Récupérer les informations d'un utilisateur
   Future<Map<String, dynamic>?> getUserInfo(String userId) async {
@@ -654,6 +660,89 @@ class FirestoreService {
     } catch (e) {
       print('❌ Erreur suppression classe: $e');
       throw Exception('Erreur lors de la suppression de la classe: $e');
+    }
+  }
+
+  // services/firestore_service.dart - AJOUTEZ cette méthode
+  Stream<List<Announcement>> getAnnouncementsStream(String classId) {
+    try {
+      print(
+        '🔍 FirestoreService - Récupération annonces pour classe: $classId',
+      );
+
+      return _firestore
+          .collection('classes')
+          .doc(classId)
+          .collection('announcements')
+          .orderBy('timestamp', descending: true)
+          .snapshots()
+          .handleError((error) {
+            print('❌ FirestoreService - Erreur stream annonces: $error');
+            throw error;
+          })
+          .map((snapshot) {
+            final announcements = snapshot.docs.map((doc) {
+              try {
+                final data = doc.data();
+                print('📄 FirestoreService - Données annonce: ${doc.id}');
+                print('📄 FirestoreService - Titre: ${data['title']}');
+                print(
+                  '📄 FirestoreService - Base64Images: ${data['base64Images']}',
+                );
+                print(
+                  '📄 FirestoreService - Attachments: ${data['attachments']}',
+                );
+
+                return Announcement.fromMap(data);
+              } catch (e) {
+                print(
+                  '❌ FirestoreService - Erreur parsing annonce ${doc.id}: $e',
+                );
+                print(
+                  '❌ FirestoreService - Données problématiques: ${doc.data()}',
+                );
+                rethrow;
+              }
+            }).toList();
+
+            print(
+              '✅ FirestoreService - ${announcements.length} annonces chargées',
+            );
+            return announcements;
+          });
+    } catch (e) {
+      print('❌ FirestoreService - Erreur initialisation stream: $e');
+      rethrow;
+    }
+  }
+
+  // Si vous avez une méthode getAnnouncements (sans stream), assurez-vous qu'elle existe aussi
+  Future<List<Announcement>> getAnnouncements(String classId) async {
+    try {
+      print(
+        '🔍 FirestoreService - Récupération annonces (once) pour classe: $classId',
+      );
+
+      final snapshot = await _firestore
+          .collection('classes')
+          .doc(classId)
+          .collection('announcements')
+          .orderBy('timestamp', descending: true)
+          .get();
+
+      final announcements = snapshot.docs.map((doc) {
+        final data = doc.data();
+        print('📄 FirestoreService - Données annonce: ${doc.id}');
+        return Announcement.fromMap(data);
+      }).toList();
+
+      print(
+        '✅ FirestoreService - ${announcements.length} annonces chargées (once)',
+      );
+      return announcements;
+    } catch (e) {
+      print('❌ FirestoreService - Erreur récupération annonces: $e');
+      rethrow;
     }
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mon_classe_manegment/models/class_model.dart';
 import 'package:provider/provider.dart';
@@ -26,6 +27,7 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
   bool _isLoading = false;
   List<PlatformFile> _selectedFiles = [];
   List<Map<String, dynamic>> _uploadedFiles = [];
+  List<String> _base64Images = [];
 
   Future<void> _pickFiles() async {
     try {
@@ -36,13 +38,31 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
       );
 
       if (result != null) {
-        setState(() {
-          _selectedFiles.addAll(result.files);
-        });
+        for (var file in result.files) {
+          if (_isImageFile(file.name)) {
+            final bytes = file.bytes;
+            if (bytes != null) {
+              final base64String = base64Encode(bytes);
+              setState(() {
+                _base64Images.add(base64String);
+              });
+            }
+          } else {
+            setState(() {
+              _selectedFiles.add(file);
+            });
+          }
+        }
       }
     } catch (e) {
       _showError('Erreur lors de la sélection des fichiers: $e');
     }
+  }
+
+  bool _isImageFile(String fileName) {
+    final imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+    final lowerFileName = fileName.toLowerCase();
+    return imageExtensions.any((ext) => lowerFileName.endsWith(ext));
   }
 
   Future<void> _publishAnnouncement() async {
@@ -57,24 +77,20 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
         throw Exception('Utilisateur non trouvé');
       }
 
-      // Créer l'ID de l'annonce
       final announcementId = DateTime.now().millisecondsSinceEpoch.toString();
 
-      // Uploader les fichiers vers Firebase Storage si présents
       if (_selectedFiles.isNotEmpty) {
         _uploadedFiles = await _storageService.uploadFiles(
           files: _selectedFiles,
           announcementId: announcementId,
         );
 
-        // Sauvegarder les métadonnées dans Firestore
         await _storageService.saveFileMetadata(
           announcementId: announcementId,
           filesMetadata: _uploadedFiles,
         );
       }
 
-      // Utiliser la nouvelle méthode qui prend classId en paramètre
       await _firestoreService.createAnnouncement(
         classId: widget.classId,
         title: _titleController.text.trim(),
@@ -82,6 +98,7 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
         authorId: user.uid,
         authorName: '${user.firstName} ${user.lastName}',
         attachments: _uploadedFiles.map((file) => file['url'] as String).toList(),
+        base64Images: _base64Images,
       );
 
       _showSuccess('Annonce publiée avec succès');
@@ -99,6 +116,12 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
   void _removeFile(int index) {
     setState(() {
       _selectedFiles.removeAt(index);
+    });
+  }
+
+  void _removeBase64Image(int index) {
+    setState(() {
+      _base64Images.removeAt(index);
     });
   }
 
@@ -146,6 +169,43 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
       default:
         return const Icon(Icons.insert_drive_file, color: Colors.grey, size: 24);
     }
+  }
+
+  Widget _buildBase64ImagePreview(String base64Image, int index) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.memory(
+              base64Decode(base64Image),
+              width: double.infinity,
+              height: 120,
+              fit: BoxFit.cover,
+            ),
+          ),
+          Positioned(
+            top: 4,
+            right: 4,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.6),
+                shape: BoxShape.circle,
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.delete, color: Colors.white, size: 16),
+                onPressed: () => _removeBase64Image(index),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -198,7 +258,6 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
                 key: _formKey,
                 child: ListView(
                   children: [
-                    // En-tête avec info de la classe
                     StreamBuilder<ClassModel?>(
                       stream: FirestoreService().getClassStream(widget.classId),
                       builder: (context, snapshot) {
@@ -234,7 +293,6 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Champ titre
                     TextFormField(
                       controller: _titleController,
                       decoration: const InputDecoration(
@@ -256,7 +314,6 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Champ contenu
                     TextFormField(
                       controller: _contentController,
                       maxLines: 8,
@@ -278,7 +335,6 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Section pièces jointes
                     Card(
                       elevation: 2,
                       shape: RoundedRectangleBorder(
@@ -301,9 +357,9 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
                                   ),
                                 ),
                                 const Spacer(),
-                                if (_selectedFiles.isNotEmpty)
+                                if (_selectedFiles.isNotEmpty || _base64Images.isNotEmpty)
                                   Text(
-                                    '${_selectedFiles.length} fichier(s)',
+                                    '${_selectedFiles.length + _base64Images.length} fichier(s)',
                                     style: TextStyle(
                                       color: Colors.grey[600],
                                       fontSize: 12,
@@ -321,7 +377,6 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
                             ),
                             const SizedBox(height: 16),
                             
-                            // Bouton d'ajout de fichiers
                             SizedBox(
                               width: double.infinity,
                               child: OutlinedButton.icon(
@@ -334,13 +389,31 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
                               ),
                             ),
 
-                            // Liste des fichiers sélectionnés
-                            if (_selectedFiles.isNotEmpty) ...[
+                            if (_base64Images.isNotEmpty) ...[
                               const SizedBox(height: 16),
                               const Divider(),
                               const SizedBox(height: 8),
                               Text(
-                                'Fichiers sélectionnés:',
+                                'Images:',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey[700],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              ..._base64Images.asMap().entries.map((entry) {
+                                final index = entry.key;
+                                final base64Image = entry.value;
+                                return _buildBase64ImagePreview(base64Image, index);
+                              }).toList(),
+                            ],
+
+                            if (_selectedFiles.isNotEmpty) ...[
+                              const SizedBox(height: 16),
+                              if (_base64Images.isNotEmpty) const Divider(),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Fichiers:',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w500,
                                   color: Colors.grey[700],
@@ -392,7 +465,6 @@ class _CreateAnnouncementScreenState extends State<CreateAnnouncementScreen> {
 
                     const SizedBox(height: 24),
 
-                    // Informations sur la publication
                     Card(
                       elevation: 1,
                       color: Colors.blue[50],

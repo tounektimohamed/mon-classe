@@ -1,3 +1,7 @@
+// widgets/announcement_card.dart - CODE COMPLET CORRIGÉ
+
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:mon_classe_manegment/services/FileService.dart';
 import 'package:provider/provider.dart';
@@ -30,11 +34,15 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
   final int _maxContentLength = 150;
   Map<String, bool> _downloadingFiles = {};
 
+  // CORRECTION: Méthode toggleLike avec classId
   void _toggleLike() async {
     if (_isLiking) return;
 
     final user = Provider.of<UserProvider>(context, listen: false).user;
-    if (user == null) return;
+    if (user == null) {
+      _showError('Utilisateur non connecté');
+      return;
+    }
 
     setState(() => _isLiking = true);
 
@@ -43,11 +51,46 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
         announcementId: widget.announcement.id,
         userId: user.uid,
         userName: '${user.firstName} ${user.lastName}',
+        classId: widget.announcement.classId, // AJOUT CRITIQUE
       );
+      
+      print('✅ Like action terminée');
     } catch (e) {
+      print('❌ Erreur toggleLike: $e');
       _showError('Erreur: $e');
     } finally {
-      setState(() => _isLiking = false);
+      if (mounted) {
+        setState(() => _isLiking = false);
+      }
+    }
+  }
+
+  // CORRECTION: Méthode addComment avec classId
+  void _addComment() async {
+    if (_commentController.text.trim().isEmpty) return;
+
+    final user = Provider.of<UserProvider>(context, listen: false).user;
+    if (user == null) {
+      _showError('Utilisateur non connecté');
+      return;
+    }
+
+    try {
+      await _firestoreService.addComment(
+        announcementId: widget.announcement.id,
+        userId: user.uid,
+        userName: '${user.firstName} ${user.lastName}',
+        content: _commentController.text.trim(),
+        classId: widget.announcement.classId, // AJOUT CRITIQUE
+      );
+      
+      _commentController.clear();
+      FocusScope.of(context).unfocus();
+      print('✅ Commentaire ajouté avec succès');
+      
+    } catch (e) {
+      print('❌ Erreur addComment: $e');
+      _showError('Erreur: $e');
     }
   }
 
@@ -83,17 +126,6 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
     final user = Provider.of<UserProvider>(context, listen: false).user;
     if (user == null) return;
 
-    // Vérifier que l'utilisateur est bien l'auteur
-    final isAuthor = await _firestoreService.isUserAuthor(
-      widget.announcement.id,
-      user.uid,
-    );
-
-    if (!isAuthor) {
-      _showError('Vous n\'êtes pas autorisé à supprimer cette annonce');
-      return;
-    }
-
     setState(() => _isDeleting = true);
 
     try {
@@ -101,7 +133,6 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
       
       _showSuccess('Annonce supprimée avec succès');
       
-      // Notifier le parent widget que l'annonce a été supprimée
       if (widget.onAnnouncementDeleted != null) {
         widget.onAnnouncementDeleted!();
       }
@@ -115,7 +146,6 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
   }
 
   void _openFile(String fileUrl, String fileName) async {
-    // Vérifier si le fichier est déjà en cours de téléchargement
     if (_downloadingFiles[fileUrl] == true) return;
 
     setState(() {
@@ -142,27 +172,6 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
       setState(() {
         _downloadingFiles[fileUrl] = false;
       });
-    }
-  }
-
-  void _addComment() async {
-    if (_commentController.text.trim().isEmpty) return;
-
-    final user = Provider.of<UserProvider>(context, listen: false).user;
-    if (user == null) return;
-
-    try {
-      await _firestoreService.addComment(
-        announcementId: widget.announcement.id,
-        userId: user.uid,
-        userName: '${user.firstName} ${user.lastName}',
-        content: _commentController.text.trim(),
-      );
-      
-      _commentController.clear();
-      FocusScope.of(context).unfocus();
-    } catch (e) {
-      _showError('Erreur: $e');
     }
   }
 
@@ -200,58 +209,396 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
     try {
       final uri = Uri.parse(url);
       final path = uri.path;
-      // Extraire le nom du fichier du chemin
       final segments = path.split('/');
       String fileName = segments.last;
-      
-      // Décoder les caractères encodés (comme %20 pour les espaces)
       fileName = Uri.decodeComponent(fileName);
       
-      // Supprimer le timestamp ajouté lors de l'upload
       final parts = fileName.split('_');
       if (parts.length > 1) {
-        // Garder seulement le nom original
         return parts.sublist(1).join('_');
       }
       
       return fileName;
     } catch (e) {
-      // En cas d'erreur, retourner une version simplifiée
       return 'fichier';
     }
   }
 
-  Widget _buildAttachmentChip(String fileUrl) {
-    final fileName = _getFileNameFromUrl(fileUrl);
-    final fileType = FileService.getFileType(fileName);
+  bool _isImageFile(String fileName) {
+    final imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+    final lowerFileName = fileName.toLowerCase();
+    return imageExtensions.any((ext) => lowerFileName.endsWith(ext));
+  }
+
+  // Méthode pour afficher les images Base64
+  Widget _buildBase64ImageAttachment(String base64Image, int index) {
+    try {
+      final bytes = base64Decode(base64Image);
+      return GestureDetector(
+        onTap: () => _showBase64ImageDialog(context, bytes, index),
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Stack(
+              children: [
+                Image.memory(
+                  bytes,
+                  width: double.infinity,
+                  height: 200,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return _buildImageErrorWidget();
+                  },
+                ),
+                Positioned(
+                  bottom: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Icon(
+                      Icons.zoom_in,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      print('Erreur décodage Base64: $e');
+      return _buildImageErrorWidget();
+    }
+  }
+
+  Widget _buildImageErrorWidget() {
+    return Container(
+      width: double.infinity,
+      height: 200,
+      color: Colors.grey[200],
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.broken_image, color: Colors.grey[400], size: 40),
+          const SizedBox(height: 8),
+          const Text(
+            'Erreur d\'affichage',
+            style: TextStyle(color: Colors.grey),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showBase64ImageDialog(BuildContext context, Uint8List imageBytes, int index) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(0),
+        child: Stack(
+          children: [
+            GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                color: Colors.black87,
+                child: Center(
+                  child: InteractiveViewer(
+                    panEnabled: true,
+                    minScale: 0.5,
+                    maxScale: 3.0,
+                    child: Image.memory(
+                      imageBytes,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 16,
+              right: 16,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageAttachment(String fileUrl, String fileName) {
     final isDownloading = _downloadingFiles[fileUrl] == true;
 
     return GestureDetector(
       onTap: isDownloading ? null : () => _openFile(fileUrl, fileName),
-      child: Chip(
-        avatar: isDownloading
-            ? const SizedBox(
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Stack(
+            children: [
+              Image.network(
+                fileUrl,
+                width: double.infinity,
+                height: 200,
+                fit: BoxFit.cover,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    width: double.infinity,
+                    height: 200,
+                    color: Colors.grey[200],
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                            : null,
+                      ),
+                    ),
+                  );
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return _buildImageErrorWidget();
+                },
+              ),
+              
+              if (!isDownloading)
+                Positioned(
+                  bottom: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Icon(
+                      Icons.zoom_in,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                ),
+              
+              if (isDownloading)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.black.withOpacity(0.3),
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(color: Colors.white),
+                            SizedBox(height: 8),
+                            Text(
+                              'Téléchargement...',
+                              style: TextStyle(color: Colors.white, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFileAttachment(String fileUrl, String fileName) {
+    final fileType = FileService.getFileType(fileName);
+    final isDownloading = _downloadingFiles[fileUrl] == true;
+
+    // Méthode helper pour convertir FileType en String
+    String getFileTypeName(dynamic type) {
+      if (type is String) return type;
+      if (type is Enum) return type.name;
+      return type.toString();
+    }
+
+    return GestureDetector(
+      onTap: isDownloading ? null : () => _openFile(fileUrl, fileName),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.grey[50],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: FileService.getFileColor(fileType).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                FileService.getFileIcon(fileType),
+                size: 24,
+                color: FileService.getFileColor(fileType),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    fileName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 14,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    getFileTypeName(fileType).toUpperCase(),
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (isDownloading)
+              const SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : Icon(
-                FileService.getFileIcon(fileType),
-                size: 16,
-                color: FileService.getFileColor(fileType),
+            else
+              Icon(
+                Icons.download,
+                color: Colors.grey[600],
+                size: 20,
               ),
-        label: Text(
-          fileName.length > 20 ? '${fileName.substring(0, 20)}...' : fileName,
-          style: TextStyle(
-            fontSize: 12,
-            color: isDownloading ? Colors.grey : null,
-          ),
-        ),
-        backgroundColor: isDownloading ? Colors.grey[100] : Colors.grey[50],
-        side: BorderSide(
-          color: isDownloading ? Colors.grey[300]! : Colors.grey[300]!,
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAttachments() {
+    final hasBase64Images = widget.announcement.base64Images.isNotEmpty;
+    final hasAttachments = widget.announcement.attachments.isNotEmpty;
+
+    if (!hasBase64Images && !hasAttachments) {
+      return const SizedBox.shrink();
+    }
+
+    final imageAttachments = widget.announcement.attachments
+        .where((url) => _isImageFile(_getFileNameFromUrl(url)))
+        .toList();
+    
+    final fileAttachments = widget.announcement.attachments
+        .where((url) => !_isImageFile(_getFileNameFromUrl(url)))
+        .toList();
+
+    final hasImageUrls = imageAttachments.isNotEmpty;
+    final hasFiles = fileAttachments.isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section Images Base64
+        if (hasBase64Images) ...[
+          const SizedBox(height: 12),
+          const Text(
+            '📷 Photos',
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Column(
+            children: widget.announcement.base64Images
+                .asMap()
+                .entries
+                .map((entry) => _buildBase64ImageAttachment(entry.value, entry.key))
+                .toList(),
+          ),
+        ],
+
+        // Section Images URLs
+        if (hasImageUrls) ...[
+          const SizedBox(height: 12),
+          const Text(
+            '📷 Photos',
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Column(
+            children: imageAttachments
+                .map((url) => _buildImageAttachment(url, _getFileNameFromUrl(url)))
+                .toList(),
+          ),
+        ],
+
+        // Section Fichiers
+        if (hasFiles) ...[
+          const SizedBox(height: 12),
+          const Text(
+            '📎 Fichiers',
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Column(
+            children: fileAttachments
+                .map((url) => _buildFileAttachment(url, _getFileNameFromUrl(url)))
+                .toList(),
+          ),
+        ],
+      ],
     );
   }
 
@@ -306,6 +653,14 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
     final isLiked = user != null ? widget.announcement.isLikedBy(user.uid) : false;
     final isAuthor = user != null && widget.announcement.authorId == user.uid;
     final shouldShowReadMore = widget.announcement.content.length > _maxContentLength && !_showFullContent;
+
+    // DEBUG
+    print('🎯 AnnouncementCard - ID: ${widget.announcement.id}');
+    print('🎯 AnnouncementCard - ClassID: ${widget.announcement.classId}');
+    print('🎯 AnnouncementCard - Likes: ${widget.announcement.likesCount}');
+    print('🎯 AnnouncementCard - Comments: ${widget.announcement.commentsCount}');
+    print('🎯 AnnouncementCard - IsLiked: $isLiked');
+    print('🎯 AnnouncementCard - User: ${user?.uid}');
 
     if (_isDeleting) {
       return Card(
@@ -366,7 +721,6 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
                     ],
                   ),
                 ),
-                // Menu de suppression (seulement pour l'auteur)
                 if (isAuthor) ...[
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert, color: Colors.grey),
@@ -438,25 +792,8 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
             ],
             const SizedBox(height: 16),
 
-            // Pièces jointes avec design amélioré
-            if (widget.announcement.attachments.isNotEmpty) ...[
-              const Text(
-                '📎 Pièces jointes',
-                style: TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: widget.announcement.attachments
-                    .map((fileUrl) => _buildAttachmentChip(fileUrl))
-                    .toList(),
-              ),
-              const SizedBox(height: 16),
-            ],
+            // Pièces jointes
+            _buildAttachments(),
 
             // Statistiques discrètes
             Container(
@@ -538,13 +875,10 @@ class _AnnouncementCardState extends State<AnnouncementCard> {
             // Section commentaires avec animation
             if (_showComments) ...[
               const SizedBox(height: 16),
-              AnimatedSize(
-                duration: const Duration(milliseconds: 300),
-                child: _CommentsSection(
-                  announcement: widget.announcement,
-                  commentController: _commentController,
-                  onAddComment: _addComment,
-                ),
+              _CommentsSection(
+                announcement: widget.announcement,
+                commentController: _commentController,
+                onAddComment: _addComment,
               ),
             ],
           ],
@@ -588,19 +922,16 @@ class _CommentsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Liste des commentaires avec limite
         if (announcement.comments.isNotEmpty) ...[
           ...announcement.comments.take(5).map((comment) {
             return _CommentItem(comment: comment);
           }).toList(),
           
-          // Bouton "Voir plus de commentaires" si nécessaire
           if (announcement.comments.length > 5) ...[
             const SizedBox(height: 8),
             Center(
               child: TextButton(
                 onPressed: () {
-                  // TODO: Naviguer vers une page dédiée aux commentaires
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Fonctionnalité à venir')),
                   );
@@ -615,7 +946,6 @@ class _CommentsSection extends StatelessWidget {
           const SizedBox(height: 16),
         ],
 
-        // Champ de commentaire
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(

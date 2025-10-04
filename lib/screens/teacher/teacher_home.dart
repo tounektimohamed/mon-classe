@@ -360,7 +360,7 @@ class NoClassScreen extends StatelessWidget {
     );
   }
 }
-
+// screens/teacher/teacher_home.dart - CORRECTION de AnnouncementsTab
 class AnnouncementsTab extends StatefulWidget {
   final String classId;
 
@@ -386,8 +386,19 @@ class _AnnouncementsTabState extends State<AnnouncementsTab> {
         setState(() {});
       },
       child: StreamBuilder<List<Announcement>>(
-        stream: FirestoreService().getAnnouncements(widget.classId),
+        stream: FirestoreService().getAnnouncementsStream(widget.classId), // CHANGÉ: getAnnouncementsStream au lieu de getAnnouncements
         builder: (context, snapshot) {
+          // DEBUG: Afficher l'état du stream
+          print('📊 AnnouncementsTab - ConnectionState: ${snapshot.connectionState}');
+          print('📊 AnnouncementsTab - HasError: ${snapshot.hasError}');
+          print('📊 AnnouncementsTab - HasData: ${snapshot.hasData}');
+          if (snapshot.hasData) {
+            print('📊 AnnouncementsTab - Nombre d\'annonces: ${snapshot.data!.length}');
+            for (var announcement in snapshot.data!) {
+              print('📊 Announcement: ${announcement.title} - Base64: ${announcement.base64Images.length} - Attachments: ${announcement.attachments.length}');
+            }
+          }
+
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
               child: Column(
@@ -405,6 +416,7 @@ class _AnnouncementsTabState extends State<AnnouncementsTab> {
           }
 
           if (snapshot.hasError) {
+            print('❌ AnnouncementsTab - Erreur: ${snapshot.error}');
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -434,6 +446,7 @@ class _AnnouncementsTabState extends State<AnnouncementsTab> {
           final announcements = snapshot.data ?? [];
 
           if (announcements.isEmpty) {
+            print('ℹ️ AnnouncementsTab - Aucune annonce trouvée');
             return SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               child: SizedBox(
@@ -465,6 +478,19 @@ class _AnnouncementsTabState extends State<AnnouncementsTab> {
                           style: TextStyle(color: Colors.grey, fontSize: 14),
                         ),
                       ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => CreateAnnouncementScreen(classId: widget.classId),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text('Créer la première annonce'),
+                      ),
                     ],
                   ),
                 ),
@@ -472,6 +498,7 @@ class _AnnouncementsTabState extends State<AnnouncementsTab> {
             );
           }
 
+          print('✅ AnnouncementsTab - ${announcements.length} annonces affichées');
           return ListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: announcements.length,
