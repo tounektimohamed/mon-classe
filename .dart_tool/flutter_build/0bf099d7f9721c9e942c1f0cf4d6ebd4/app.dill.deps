@@ -1633,6 +1633,7 @@ file:///home/tounekti/mon_classe_manegment/lib/main.dart
 file:///home/tounekti/mon_classe_manegment/lib/models/announcement_model.dart
 file:///home/tounekti/mon_classe_manegment/lib/models/class_model.dart
 file:///home/tounekti/mon_classe_manegment/lib/models/message_model.dart
+file:///home/tounekti/mon_classe_manegment/lib/models/sanction_model.dart
 file:///home/tounekti/mon_classe_manegment/lib/models/student_model.dart
 file:///home/tounekti/mon_classe_manegment/lib/models/user_model.dart
 file:///home/tounekti/mon_classe_manegment/lib/providers/user_provider.dart
@@ -1642,10 +1643,12 @@ file:///home/tounekti/mon_classe_manegment/lib/screens/auth/teacher_register_scr
 file:///home/tounekti/mon_classe_manegment/lib/screens/parent/parent_home.dart
 file:///home/tounekti/mon_classe_manegment/lib/screens/parent/parent_messaging.dart
 file:///home/tounekti/mon_classe_manegment/lib/screens/shared/chat_screen.dart
+file:///home/tounekti/mon_classe_manegment/lib/screens/teacher/add_sanction_dialog.dart
 file:///home/tounekti/mon_classe_manegment/lib/screens/teacher/add_student_screen.dart
 file:///home/tounekti/mon_classe_manegment/lib/screens/teacher/class_creation_screen.dart
 file:///home/tounekti/mon_classe_manegment/lib/screens/teacher/class_selection_screen.dart
 file:///home/tounekti/mon_classe_manegment/lib/screens/teacher/create_announcement.dart
+file:///home/tounekti/mon_classe_manegment/lib/screens/teacher/sanction_management.dart
 file:///home/tounekti/mon_classe_manegment/lib/screens/teacher/teacher_home.dart
 file:///home/tounekti/mon_classe_manegment/lib/screens/teacher/teacher_messaging.dart
 file:///home/tounekti/mon_classe_manegment/lib/services/FileService.dart
@@ -1655,6 +1658,7 @@ file:///home/tounekti/mon_classe_manegment/lib/services/message_service.dart
 file:///home/tounekti/mon_classe_manegment/lib/services/storage_service.dart
 file:///home/tounekti/mon_classe_manegment/lib/widgets/announcement_card.dart
 file:///home/tounekti/mon_classe_manegment/lib/widgets/message_bubble.dart
+file:///home/tounekti/mon_classe_manegment/lib/widgets/student_sanction_badge.dart
 org-dartlang-sdk:///dart-sdk/lib/_http/crypto.dart
 org-dartlang-sdk:///dart-sdk/lib/_http/embedder_config.dart
 org-dartlang-sdk:///dart-sdk/lib/_http/http.dart

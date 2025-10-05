@@ -11,8 +11,10 @@ import 'package:mon_classe_manegment/models/student_model.dart';
 import 'package:mon_classe_manegment/models/user_model.dart';
 import 'package:mon_classe_manegment/screens/shared/chat_screen.dart';
 import 'package:mon_classe_manegment/screens/teacher/add_student_screen.dart';
+import 'package:mon_classe_manegment/screens/teacher/sanction_management.dart';
 import 'package:mon_classe_manegment/services/auth_service.dart';
 import 'package:mon_classe_manegment/services/firestore_service.dart';
+import 'package:mon_classe_manegment/widgets/student_sanction_badge.dart';
 import 'package:provider/provider.dart';
 import '../../providers/user_provider.dart';
 import 'create_announcement.dart';
@@ -28,7 +30,8 @@ class TeacherHome extends StatefulWidget {
   State<TeacherHome> createState() => _TeacherHomeState();
 }
 
-class _TeacherHomeState extends State<TeacherHome> {
+class _TeacherHomeState extends State<TeacherHome> with TickerProviderStateMixin {
+
   int _currentIndex = 0;
   String? _selectedClassId;
 
@@ -269,6 +272,12 @@ class _TeacherHomeState extends State<TeacherHome> {
                   label: 'Élèves',
                 ),
                 BottomNavigationBarItem(
+                  icon: Icon(Icons.gavel_outlined),
+                  activeIcon: Icon(Icons.gavel),
+                  label: 'Sanctions',
+                ),
+
+                BottomNavigationBarItem(
                   icon: Icon(Icons.message_outlined),
                   activeIcon: Icon(Icons.message),
                   label: 'Messages',
@@ -305,13 +314,26 @@ class _TeacherHomeState extends State<TeacherHome> {
       children: [
         AnnouncementsTab(classId: _selectedClassId!),
         ClassManagementTab(classId: _selectedClassId!),
+        SanctionsTab(classId: _selectedClassId!),
+
         TeacherMessagingTab(classId: _selectedClassId!),
         const ProfileTab(),
       ],
     );
   }
 }
+class SanctionsTab extends StatelessWidget {
+  final String classId;
 
+  const SanctionsTab({super.key, required this.classId});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SanctionManagementScreen(classId: classId),
+    );
+  }
+}
 class NoClassScreen extends StatelessWidget {
   const NoClassScreen({super.key});
 
@@ -360,6 +382,7 @@ class NoClassScreen extends StatelessWidget {
     );
   }
 }
+
 // screens/teacher/teacher_home.dart - CORRECTION de AnnouncementsTab
 class AnnouncementsTab extends StatefulWidget {
   final String classId;
@@ -386,16 +409,24 @@ class _AnnouncementsTabState extends State<AnnouncementsTab> {
         setState(() {});
       },
       child: StreamBuilder<List<Announcement>>(
-        stream: FirestoreService().getAnnouncementsStream(widget.classId), // CHANGÉ: getAnnouncementsStream au lieu de getAnnouncements
+        stream: FirestoreService().getAnnouncementsStream(
+          widget.classId,
+        ), // CHANGÉ: getAnnouncementsStream au lieu de getAnnouncements
         builder: (context, snapshot) {
           // DEBUG: Afficher l'état du stream
-          print('📊 AnnouncementsTab - ConnectionState: ${snapshot.connectionState}');
+          print(
+            '📊 AnnouncementsTab - ConnectionState: ${snapshot.connectionState}',
+          );
           print('📊 AnnouncementsTab - HasError: ${snapshot.hasError}');
           print('📊 AnnouncementsTab - HasData: ${snapshot.hasData}');
           if (snapshot.hasData) {
-            print('📊 AnnouncementsTab - Nombre d\'annonces: ${snapshot.data!.length}');
+            print(
+              '📊 AnnouncementsTab - Nombre d\'annonces: ${snapshot.data!.length}',
+            );
             for (var announcement in snapshot.data!) {
-              print('📊 Announcement: ${announcement.title} - Base64: ${announcement.base64Images.length} - Attachments: ${announcement.attachments.length}');
+              print(
+                '📊 Announcement: ${announcement.title} - Base64: ${announcement.base64Images.length} - Attachments: ${announcement.attachments.length}',
+              );
             }
           }
 
@@ -484,7 +515,9 @@ class _AnnouncementsTabState extends State<AnnouncementsTab> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => CreateAnnouncementScreen(classId: widget.classId),
+                              builder: (context) => CreateAnnouncementScreen(
+                                classId: widget.classId,
+                              ),
                             ),
                           );
                         },
@@ -498,7 +531,9 @@ class _AnnouncementsTabState extends State<AnnouncementsTab> {
             );
           }
 
-          print('✅ AnnouncementsTab - ${announcements.length} annonces affichées');
+          print(
+            '✅ AnnouncementsTab - ${announcements.length} annonces affichées',
+          );
           return ListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: announcements.length,
@@ -781,14 +816,23 @@ class _ClassManagementTabState extends State<ClassManagementTab> {
                   return Card(
                     margin: const EdgeInsets.only(bottom: 8),
                     child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: Colors.blue[100],
-                        child: Text(
-                          student.firstName.isNotEmpty
-                              ? student.firstName[0].toUpperCase()
-                              : '?',
-                          style: const TextStyle(color: Colors.blue),
-                        ),
+                      leading: Stack(
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: Colors.blue[100],
+                            child: Text(
+                              student.firstName.isNotEmpty
+                                  ? student.firstName[0].toUpperCase()
+                                  : '?',
+                              style: const TextStyle(color: Colors.blue),
+                            ),
+                          ),
+                          Positioned(
+                            top: 0,
+                            right: 0,
+                            child: StudentSanctionBadge(studentId: student.id),
+                          ),
+                        ],
                       ),
                       title: Text(student.fullName),
                       subtitle: Text(
@@ -1675,6 +1719,7 @@ class _ParentCodeDialogState extends State<_ParentCodeDialog> {
     );
   }
 }
+
 // Ajoutez cette classe dans teacher_home.dart
 class _NewConversationDialog extends StatefulWidget {
   final String classId;
@@ -1709,7 +1754,10 @@ class _NewConversationDialogState extends State<_NewConversationDialog> {
       final snapshot = await _firestore
           .collection('students')
           .where('classId', isEqualTo: widget.classId)
-          .where('parentId', isNotEqualTo: null) // Seulement les élèves avec parent
+          .where(
+            'parentId',
+            isNotEqualTo: null,
+          ) // Seulement les élèves avec parent
           .get();
 
       setState(() {
@@ -1738,14 +1786,15 @@ class _NewConversationDialogState extends State<_NewConversationDialog> {
 
       if (parentDoc.exists) {
         final parent = UserModel.fromMap(parentDoc.data()!);
-        
+
         // Créer un message initial
         final initialMessage = Message(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
           senderId: widget.teacherId,
           receiverId: parent.uid,
           studentId: _selectedStudent!.id,
-          content: 'Bonjour, je suis l\'enseignant de ${_selectedStudent!.firstName}',
+          content:
+              'Bonjour, je suis l\'enseignant de ${_selectedStudent!.firstName}',
           timestamp: DateTime.now(),
           isRead: false,
           participants: [widget.teacherId, parent.uid],
@@ -1780,34 +1829,34 @@ class _NewConversationDialogState extends State<_NewConversationDialog> {
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : _error != null
-                ? Text(_error!)
-                : _students.isEmpty
-                    ? const Text('Aucun parent disponible pour cette classe')
-                    : Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('Sélectionnez un élève :'),
-                          const SizedBox(height: 16),
-                          DropdownButtonFormField<Student>(
-                            value: _selectedStudent,
-                            items: _students.map((student) {
-                              return DropdownMenuItem(
-                                value: student,
-                                child: Text(student.fullName),
-                              );
-                            }).toList(),
-                            onChanged: (student) {
-                              setState(() {
-                                _selectedStudent = student;
-                              });
-                            },
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              labelText: 'Élève',
-                            ),
-                          ),
-                        ],
-                      ),
+            ? Text(_error!)
+            : _students.isEmpty
+            ? const Text('Aucun parent disponible pour cette classe')
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Sélectionnez un élève :'),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<Student>(
+                    value: _selectedStudent,
+                    items: _students.map((student) {
+                      return DropdownMenuItem(
+                        value: student,
+                        child: Text(student.fullName),
+                      );
+                    }).toList(),
+                    onChanged: (student) {
+                      setState(() {
+                        _selectedStudent = student;
+                      });
+                    },
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      labelText: 'Élève',
+                    ),
+                  ),
+                ],
+              ),
       ),
       actions: [
         TextButton(

@@ -2,6 +2,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:mon_classe_manegment/models/message_model.dart';
+import 'package:mon_classe_manegment/models/sanction_model.dart';
 import 'package:mon_classe_manegment/models/user_model.dart';
 import 'package:mon_classe_manegment/screens/shared/chat_screen.dart';
 import 'package:provider/provider.dart';
@@ -84,6 +85,42 @@ class _ParentHomeState extends State<ParentHome> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  // Dans _ParentHomeState, ajoutez cette méthode
+  Widget _buildAppBarTitle() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Mon enfant',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        Text(
+          _student?.fullName ?? 'Chargement...',
+          style: const TextStyle(fontSize: 12, color: Colors.white70),
+        ),
+        if (_student != null)
+          StreamBuilder<List<Sanction>>(
+            stream: FirestoreService().getStudentSanctions(_student!.id),
+            builder: (context, snapshot) {
+              if (snapshot.hasData) {
+                final activeSanctions = snapshot.data!
+                    .where((s) => s.isValid)
+                    .length;
+
+                if (activeSanctions > 0) {
+                  return Text(
+                    '$activeSanctions sanction(s) active(s)',
+                    style: const TextStyle(fontSize: 10, color: Colors.orange),
+                  );
+                }
+              }
+              return const SizedBox();
+            },
+          ),
+      ],
+    );
   }
 
   void _showLogoutDialog() {
@@ -225,22 +262,10 @@ class _ParentHomeState extends State<ParentHome> {
       );
     }
 
-    // Écran principal
+    // Écran principal - CORRIGÉ
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Mon enfant',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-            Text(
-              _student?.fullName ?? 'Chargement...',
-              style: const TextStyle(fontSize: 12, color: Colors.white70),
-            ),
-          ],
-        ),
+        title: _buildAppBarTitle(), // ✅ Utilise la méthode avec badge
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
         actions: [
@@ -258,8 +283,8 @@ class _ParentHomeState extends State<ParentHome> {
         backgroundColor: Colors.white,
         selectedItemColor: const Color(0xFF1976D2),
         unselectedItemColor: const Color(0xFF757575),
-        selectedIconTheme: const IconThemeData(size: 28),
-        unselectedIconTheme: const IconThemeData(size: 24),
+        selectedIconTheme: const IconThemeData(size: 24),
+        unselectedIconTheme: const IconThemeData(size: 22),
         selectedLabelStyle: const TextStyle(
           fontWeight: FontWeight.w600,
           fontSize: 12,
@@ -269,11 +294,25 @@ class _ParentHomeState extends State<ParentHome> {
         elevation: 8,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.announcement),
+            icon: Icon(Icons.announcement_outlined),
+            activeIcon: Icon(Icons.announcement),
             label: 'Annonces',
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.message), label: 'Messages'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.gavel_outlined),
+            activeIcon: Icon(Icons.gavel),
+            label: 'Sanctions',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.message_outlined),
+            activeIcon: Icon(Icons.message),
+            label: 'Messages',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outlined),
+            activeIcon: Icon(Icons.person),
+            label: 'Profil',
+          ),
         ],
       ),
     );
@@ -300,9 +339,10 @@ class _ParentHomeState extends State<ParentHome> {
       case 0:
         return ParentAnnouncementsTab(student: _student!);
       case 1:
-        return ParentMessagingTab(student: _student!);
-
+        return ParentSanctionsTab(student: _student!); // NOUVEL ONGLET
       case 2:
+        return ParentMessagingTab(student: _student!);
+      case 3:
         return ParentProfileTab(
           user: Provider.of<UserProvider>(context).user!,
           student: _student!,
@@ -312,6 +352,7 @@ class _ParentHomeState extends State<ParentHome> {
     }
   }
 }
+
 // screens/parent/parent_home.dart - CORRECTION de ParentAnnouncementsTab
 class ParentAnnouncementsTab extends StatelessWidget {
   final Student student;
@@ -321,15 +362,27 @@ class ParentAnnouncementsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Announcement>>(
-      stream: FirestoreService().getAnnouncementsStream(student.classId), // CHANGÉ: getAnnouncementsStream au lieu de getAnnouncements
+      stream: FirestoreService().getAnnouncementsStream(
+        student.classId,
+      ), // CHANGÉ: getAnnouncementsStream au lieu de getAnnouncements
       builder: (context, snapshot) {
         // DEBUG
-        print('👨‍👩‍👧‍👦 ParentAnnouncementsTab - Classe: ${student.classId}');
-        print('👨‍👩‍👧‍👦 ParentAnnouncementsTab - État: ${snapshot.connectionState}');
-        print('👨‍👩‍👧‍👦 ParentAnnouncementsTab - Erreur: ${snapshot.hasError}');
-        print('👨‍👩‍👧‍👦 ParentAnnouncementsTab - Données: ${snapshot.hasData}');
+        print(
+          '👨‍👩‍👧‍👦 ParentAnnouncementsTab - Classe: ${student.classId}',
+        );
+        print(
+          '👨‍👩‍👧‍👦 ParentAnnouncementsTab - État: ${snapshot.connectionState}',
+        );
+        print(
+          '👨‍👩‍👧‍👦 ParentAnnouncementsTab - Erreur: ${snapshot.hasError}',
+        );
+        print(
+          '👨‍👩‍👧‍👦 ParentAnnouncementsTab - Données: ${snapshot.hasData}',
+        );
         if (snapshot.hasData) {
-          print('👨‍👩‍👧‍👦 ParentAnnouncementsTab - Annonces: ${snapshot.data!.length}');
+          print(
+            '👨‍👩‍👧‍👦 ParentAnnouncementsTab - Annonces: ${snapshot.data!.length}',
+          );
         }
 
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -396,7 +449,9 @@ class ParentAnnouncementsTab extends StatelessWidget {
           );
         }
 
-        print('✅ ParentAnnouncementsTab - ${announcements.length} annonces affichées');
+        print(
+          '✅ ParentAnnouncementsTab - ${announcements.length} annonces affichées',
+        );
         return ListView.builder(
           padding: const EdgeInsets.symmetric(vertical: 8),
           itemCount: announcements.length,
@@ -409,6 +464,394 @@ class ParentAnnouncementsTab extends StatelessWidget {
     );
   }
 }
+
+class ParentSanctionsTab extends StatelessWidget {
+  final Student student;
+
+  const ParentSanctionsTab({super.key, required this.student});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<Sanction>>(
+      stream: FirestoreService().getStudentSanctions(student.id),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text(
+                  'Chargement des sanctions...',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+                const SizedBox(height: 16),
+                const Text(
+                  'Erreur de chargement',
+                  style: TextStyle(fontSize: 18, color: Colors.grey),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  snapshot.error.toString(),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.grey),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final sanctions = snapshot.data ?? [];
+        final activeSanctions = sanctions.where((s) => s.isValid).toList();
+        final resolvedSanctions = sanctions.where((s) => !s.isValid).toList();
+
+        return DefaultTabController(
+          length: 2,
+          child: Column(
+            children: [
+              // En-tête avec résumé
+              Container(
+                padding: const EdgeInsets.all(16),
+                color: Colors.grey[50],
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildSummaryItem(
+                      'Total',
+                      sanctions.length.toString(),
+                      Colors.blue,
+                    ),
+                    _buildSummaryItem(
+                      'Actives',
+                      activeSanctions.length.toString(),
+                      Colors.orange,
+                    ),
+                    _buildSummaryItem(
+                      'Résolues',
+                      resolvedSanctions.length.toString(),
+                      Colors.green,
+                    ),
+                  ],
+                ),
+              ),
+
+              // Onglets
+              Container(
+                color: Colors.white,
+                child: TabBar(
+                  labelColor: Colors.blue,
+                  unselectedLabelColor: Colors.grey,
+                  indicatorColor: Colors.blue,
+                  tabs: [
+                    Tab(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('Actives'),
+                          if (activeSanctions.isNotEmpty)
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                activeSanctions.length.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    Tab(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('Résolues'),
+                          if (resolvedSanctions.isNotEmpty)
+                            Container(
+                              margin: const EdgeInsets.only(left: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.green,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                resolvedSanctions.length.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Contenu des onglets
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    _buildSanctionsList(
+                      activeSanctions,
+                      'Aucune sanction active',
+                    ),
+                    _buildSanctionsList(
+                      resolvedSanctions,
+                      'Aucune sanction résolue',
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSummaryItem(String label, String value, Color color) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.grey,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSanctionsList(List<Sanction> sanctions, String emptyMessage) {
+    if (sanctions.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.assignment_turned_in, size: 64, color: Colors.grey[300]),
+            const SizedBox(height: 16),
+            Text(
+              emptyMessage,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[500],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: sanctions.length,
+      itemBuilder: (context, index) {
+        final sanction = sanctions[index];
+        return _buildSanctionCard(sanction);
+      },
+    );
+  }
+
+  Widget _buildSanctionCard(Sanction sanction) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // En-tête avec type et sévérité
+            Row(
+              children: [
+                // Indicateur de sévérité
+                Container(
+                  width: 4,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: sanction.severityColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        sanction.reason,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Chip(
+                            label: Text(
+                              sanction.typeDisplay,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.white,
+                              ),
+                            ),
+                            backgroundColor: Colors.blue,
+                          ),
+                          const SizedBox(width: 8),
+                          Chip(
+                            label: Text(
+                              sanction.severityDisplay,
+                              style: const TextStyle(
+                                fontSize: 10,
+                                color: Colors.white,
+                              ),
+                            ),
+                            backgroundColor: sanction.severityColor,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Détails
+            if (sanction.details != null) ...[
+              Text(
+                sanction.details!,
+                style: const TextStyle(fontSize: 14, color: Colors.black87),
+              ),
+              const SizedBox(height: 8),
+            ],
+
+            // Informations complémentaires
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Date: ${_formatDate(sanction.date)}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      if (sanction.endDate != null)
+                        Text(
+                          'Jusqu\'au: ${_formatDate(sanction.endDate!)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
+                        ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: sanction.isValid
+                          ? Colors.orange[100]
+                          : Colors.green[100],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      sanction.isValid ? 'En cours' : 'Résolue',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: sanction.isValid
+                            ? Colors.orange[800]
+                            : Colors.green[800],
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Enseignant
+            const SizedBox(height: 8),
+            Text(
+              'Par: ${sanction.teacherName}',
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  }
+}
+
 // Dans parent_home.dart - remplacer ParentMessagingTab
 class ParentMessagingTab extends StatefulWidget {
   final Student student;

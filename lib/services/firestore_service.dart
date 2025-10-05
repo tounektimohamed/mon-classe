@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mon_classe_manegment/models/class_model.dart';
+import 'package:mon_classe_manegment/models/sanction_model.dart';
 import 'package:mon_classe_manegment/services/storage_service.dart';
 import '../models/announcement_model.dart';
 import '../models/student_model.dart';
@@ -745,4 +746,174 @@ Future<bool> isUserAuthor(String announcementId, String userId) async {
       rethrow;
     }
   }
+
+
+  Future<void> addSanction(Sanction sanction) async {
+    try {
+      await _firestore
+          .collection('sanctions')
+          .doc(sanction.id)
+          .set(sanction.toMap());
+
+      print('✅ Sanction ajoutée pour ${sanction.studentName}');
+    } catch (e) {
+      print('❌ Erreur ajout sanction: $e');
+      rethrow;
+    }
+  }
+
+  // Récupérer les sanctions d'un élève
+ // Récupérer les sanctions d'un élève
+Stream<List<Sanction>> getStudentSanctions(String studentId) {
+  return _firestore
+      .collection('sanctions')
+      .where('studentId', isEqualTo: studentId)
+      .snapshots()
+      .map((snapshot) {
+        final sanctions = snapshot.docs
+            .map((doc) => Sanction.fromMap(doc.data()))
+            .toList();
+
+        // 🔹 Trier localement par date (du plus récent au plus ancien)
+        sanctions.sort((a, b) => b.date.compareTo(a.date));
+
+        return sanctions;
+      });
 }
+
+// Récupérer les sanctions d'une classe
+Stream<List<Sanction>> getClassSanctions(String classId) {
+  return _firestore
+      .collection('sanctions')
+      .where('classId', isEqualTo: classId)
+      .snapshots()
+      .map((snapshot) {
+        final sanctions = snapshot.docs
+            .map((doc) => Sanction.fromMap(doc.data()))
+            .toList();
+
+        // 🔹 Trier localement par date (du plus récent au plus ancien)
+        sanctions.sort((a, b) => b.date.compareTo(a.date));
+
+        return sanctions;
+      });
+}
+
+  // Compter les sanctions actives d'un élève
+  Future<int> getStudentActiveSanctionsCount(String studentId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('sanctions')
+          .where('studentId', isEqualTo: studentId)
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      return snapshot.docs.length;
+    } catch (e) {
+      print('❌ Erreur comptage sanctions: $e');
+      return 0;
+    }
+  }
+
+  // Marquer une sanction comme résolue
+  Future<void> resolveSanction(String sanctionId) async {
+    try {
+      await _firestore
+          .collection('sanctions')
+          .doc(sanctionId)
+          .update({'isActive': false});
+
+      print('✅ Sanction marquée comme résolue: $sanctionId');
+    } catch (e) {
+      print('❌ Erreur résolution sanction: $e');
+      rethrow;
+    }
+  }
+
+  // Supprimer une sanction
+  Future<void> deleteSanction(String sanctionId) async {
+    try {
+      await _firestore
+          .collection('sanctions')
+          .doc(sanctionId)
+          .delete();
+
+      print('✅ Sanction supprimée: $sanctionId');
+    } catch (e) {
+      print('❌ Erreur suppression sanction: $e');
+      rethrow;
+    }
+  }
+// Obtenir les statistiques de sanctions d'une classe
+Future<Map<String, dynamic>> getClassSanctionsStats(String classId) async {
+  try {
+    final snapshot = await _firestore
+        .collection('sanctions')
+        .where('classId', isEqualTo: classId)
+        .get();
+
+    final sanctions = snapshot.docs
+        .map((doc) => Sanction.fromMap(doc.data()))
+        .toList();
+
+    final activeSanctions = sanctions.where((s) => s.isValid).length;
+    final totalSanctions = sanctions.length;
+
+    // 🔹 Compter par type (tous les types définis dans l'enum)
+    final remarqueOrales = sanctions
+        .where((s) => s.type == SanctionType.remarqueOrale)
+        .length;
+    final observations = sanctions
+        .where((s) => s.type == SanctionType.observationEcrite)
+        .length;
+    final travauxEducatifs = sanctions
+        .where((s) => s.type == SanctionType.travailEducatif)
+        .length;
+    final avertissements = sanctions
+        .where((s) => s.type == SanctionType.avertissement)
+        .length;
+    final tachesAide = sanctions
+        .where((s) => s.type == SanctionType.tacheAide)
+        .length;
+    final detentions = sanctions
+        .where((s) => s.type == SanctionType.detention)
+        .length;
+    final exclusions = sanctions
+        .where((s) => s.type == SanctionType.exclusion)
+        .length;
+    final autres = sanctions
+        .where((s) => s.type == SanctionType.autre)
+        .length;
+
+    return {
+      'total': totalSanctions,
+      'active': activeSanctions,
+      'remarqueOrales': remarqueOrales,
+      'observations': observations,
+      'travauxEducatifs': travauxEducatifs,
+      'avertissements': avertissements,
+      'tachesAide': tachesAide,
+      'detentions': detentions,
+      'exclusions': exclusions,
+      'autres': autres,
+    };
+  } catch (e) {
+    print('❌ Erreur statistiques sanctions: $e');
+    return {
+      'total': 0,
+      'active': 0,
+      'remarqueOrales': 0,
+      'observations': 0,
+      'travauxEducatifs': 0,
+      'avertissements': 0,
+      'tachesAide': 0,
+      'detentions': 0,
+      'exclusions': 0,
+      'autres': 0,
+    };
+  }
+}
+
+}
+
+

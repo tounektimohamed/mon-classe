@@ -1,3 +1,5 @@
+import 'package:mon_classe_manegment/services/firestore_service.dart';
+
 class Student {
   final String id;
   final String firstName;
@@ -16,6 +18,7 @@ class Student {
   });
 
   String get fullName => '$firstName $lastName';
+
 
   Map<String, dynamic> toMap() {
     return {
@@ -37,5 +40,10 @@ class Student {
       parentId: map['parentId'],
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['createdAt']),
     );
+  }
+    Future<int> getActiveSanctionsCount() async {
+    // Cette méthode sera implémentée dans FirestoreService
+    final firestoreService = FirestoreService();
+    return await firestoreService.getStudentActiveSanctionsCount(id);
   }
 }
