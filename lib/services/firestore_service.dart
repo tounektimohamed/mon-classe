@@ -1,9 +1,10 @@
 import 'dart:math';
 
+import 'package:Joussour/models/class_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:mon_classe_manegment/models/class_model.dart';
-import 'package:mon_classe_manegment/models/sanction_model.dart';
-import 'package:mon_classe_manegment/services/storage_service.dart';
+import 'package:Joussour/models/class_model.dart';
+import 'package:Joussour/models/sanction_model.dart';
+import 'package:Joussour/services/storage_service.dart';
 import '../models/announcement_model.dart';
 import '../models/student_model.dart';
 import '../models/message_model.dart';

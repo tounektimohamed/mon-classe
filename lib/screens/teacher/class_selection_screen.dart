@@ -1,6 +1,6 @@
 // screens/teacher/class_selection_screen.dart
 import 'package:flutter/material.dart';
-import 'package:mon_classe_manegment/screens/teacher/class_creation_screen.dart';
+import 'package:Joussour/screens/teacher/class_creation_screen.dart';
 import 'package:provider/provider.dart';
 import '../../models/class_model.dart';
 import '../../providers/user_provider.dart';

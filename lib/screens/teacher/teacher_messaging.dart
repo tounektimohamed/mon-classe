@@ -1,5 +1,5 @@
 // import 'package:flutter/material.dart';
-// import 'package:mon_classe_manegment/models/student_model.dart';
+// import 'package:Joussour/models/student_model.dart';
 // import 'package:provider/provider.dart';
 // import 'package:cloud_firestore/cloud_firestore.dart';
 // import '../../models/message_model.dart';

@@ -1,10 +1,10 @@
 // screens/parent/parent_home.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:mon_classe_manegment/models/message_model.dart';
-import 'package:mon_classe_manegment/models/sanction_model.dart';
-import 'package:mon_classe_manegment/models/user_model.dart';
-import 'package:mon_classe_manegment/screens/shared/chat_screen.dart';
+import 'package:Joussour/models/message_model.dart';
+import 'package:Joussour/models/sanction_model.dart';
+import 'package:Joussour/models/user_model.dart';
+import 'package:Joussour/screens/shared/chat_screen.dart';
 import 'package:provider/provider.dart';
 import '../../models/announcement_model.dart';
 import '../../models/student_model.dart';

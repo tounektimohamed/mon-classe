@@ -1,4 +1,4 @@
-package com.example.mon_classe_manegment
+package com.example.Joussour
 
 import io.flutter.embedding.android.FlutterActivity
 

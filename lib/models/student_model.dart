@@ -1,4 +1,4 @@
-import 'package:mon_classe_manegment/services/firestore_service.dart';
+import 'package:Joussour/services/firestore_service.dart';
 
 class Student {
   final String id;

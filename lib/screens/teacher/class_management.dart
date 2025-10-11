@@ -1,5 +1,5 @@
 // import 'package:flutter/material.dart';
-// import 'package:mon_classe_manegment/widgets/student_card.dart';
+// import 'package:Joussour/widgets/student_card.dart';
 // import 'package:provider/provider.dart';
 // import 'package:cloud_firestore/cloud_firestore.dart';
 // import 'package:clipboard/clipboard.dart';

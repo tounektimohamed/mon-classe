@@ -1,38 +1,114 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Application Joussour - Communication école-parents">
+  
+  <!-- Viewport pour le responsive -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
   <!-- iOS meta tags & icons -->
-  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="mon_classe_manegment">
+  <meta name="apple-mobile-web-app-title" content="Joussour">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Android meta tags -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#2196F3">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>mon_classe_manegment</title>
+  <title>Joussour</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Firebase App (the core Firebase SDK) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <!-- Firebase Messaging -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
+  
+  <script>
+    // Configuration Firebase avec VOS VRAIES VALEURS
+    const firebaseConfig = {
+      apiKey: "AIzaSyA3MCEzAmK163Kqj4b-v5nZQOndWQKedis",
+      authDomain: "scoutetrampe.firebaseapp.com",
+      projectId: "scoutetrampe",
+      storageBucket: "scoutetrampe.firebasestorage.app",
+      messagingSenderId: "120598335519",
+      appId: "1:120598335519:web:9d433ea9f57d7202c2c52a"
+    };
+
+    console.log('🚀 Initialisation Firebase avec la configuration web...');
+
+    // Initialisation Firebase
+    try {
+      firebase.initializeApp(firebaseConfig);
+      console.log('✅ Firebase initialisé avec succès dans index.html');
+      
+      // Configuration de Firebase Messaging
+      const messaging = firebase.messaging();
+      
+      // Gestionnaire pour les messages en arrière-plan
+      messaging.onBackgroundMessage(function(payload) {
+        console.log('📱 Message FCM reçu en arrière-plan:', payload);
+        
+        // Personnaliser la notification
+        const notificationTitle = payload.notification?.title || 'Nouveau message Joussour';
+        const notificationOptions = {
+          body: payload.notification?.body || 'Vous avez un nouveau message',
+          icon: '/icons/Icon-192.png',
+          badge: '/icons/Icon-192.png',
+          tag: 'joussour-chat-message',
+          requireInteraction: true,
+          data: payload.data
+        };
+
+        // Afficher la notification
+        return self.registration.showNotification(notificationTitle, notificationOptions);
+      });
+
+      console.log('✅ Firebase Messaging configuré');
+
+    } catch (error) {
+      console.error('❌ Erreur initialisation Firebase:', error);
+    }
+
+    // Service Worker pour les notifications
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/firebase-messaging-sw.js')
+          .then(function(registration) {
+            console.log('✅ Service Worker enregistré avec scope:', registration.scope);
+          })
+          .catch(function(error) {
+            console.log('❌ Erreur enregistrement Service Worker:', error);
+          });
+      });
+    } else {
+      console.log('ℹ️ Service Worker non supporté par ce navigateur');
+    }
+  </script>
 </head>
 <body>
+  <!-- Flutter app -->
   <script src="flutter_bootstrap.js" async></script>
+
+  <!-- Script pour gérer les erreurs de chargement -->
+  <script>
+    window.addEventListener('error', function(e) {
+      console.error('❌ Erreur globale:', e.error);
+    });
+
+    window.addEventListener('unhandledrejection', function(e) {
+      console.error('❌ Promise rejetée:', e.reason);
+    });
+
+    // Log de démarrage
+    console.log('🎯 Application Joussour démarrage...');
+  </script>
 </body>
 </html>

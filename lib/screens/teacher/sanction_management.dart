@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mon_classe_manegment/screens/teacher/add_sanction_dialog.dart';
+import 'package:Joussour/screens/teacher/add_sanction_dialog.dart';
 import 'package:provider/provider.dart';
 import '../../models/sanction_model.dart';
 import '../../models/student_model.dart';

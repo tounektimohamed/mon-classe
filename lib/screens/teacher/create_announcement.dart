@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:mon_classe_manegment/models/class_model.dart';
+import 'package:Joussour/models/class_model.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../models/announcement_model.dart';

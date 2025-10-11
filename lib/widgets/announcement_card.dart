@@ -3,7 +3,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:mon_classe_manegment/services/FileService.dart';
+import 'package:Joussour/services/FileService.dart';
 import 'package:provider/provider.dart';
 import '../models/announcement_model.dart';
 import '../providers/user_provider.dart';

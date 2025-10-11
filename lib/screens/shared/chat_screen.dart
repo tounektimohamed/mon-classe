@@ -8,7 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:image_picker_web/image_picker_web.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:mon_classe_manegment/widgets/message_bubble.dart';
+import 'package:Joussour/widgets/message_bubble.dart';
 import '../../models/message_model.dart';
 import '../../models/student_model.dart';
 import '../../services/message_service.dart';
