@@ -140,80 +140,87 @@ class MessageService {
     // Sauvegarder l'erreur pour analyse
     await _saveNotificationError(message, e.toString());
   }
-}
-Future<void> _sendNotificationViaFunction({
+}Future<void> _sendNotificationViaFunction({
   required List<String> receiverTokens,
   required String title,
   required String body,
   required Map<String, dynamic> data,
+  int retryCount = 0,
 }) async {
   try {
-    print('🚀 [FCM DIRECT] Début envoi direct FCM');
-    
-    const String serverKey = 'BCMXy0zwJ_vZayTu41kf4wjKt2m8si7i4pbhSJSI3xQFCc3j6lYrFYRrrE7Tk1hx8cTqQuqYRSwYEJSQ0Y_Dcns';
+    print('📤 [Cloud Functions] Envoi notification (tentative ${retryCount + 1})');
     
     if (receiverTokens.isEmpty) return;
 
-    final token = receiverTokens.firstWhere(
-      (token) => token.length > 10,
-      orElse: () => '',
-    );
+    final validTokens = receiverTokens.where((token) => token.length > 10).toList();
+    if (validTokens.isEmpty) return;
 
-    if (token.isEmpty) return;
+    // Préparer les données pour Cloud Functions
+    final notificationData = {
+      'tokens': validTokens,
+      'title': title,
+      'body': body,
+      'data': data,
+      'timestamp': FieldValue.serverTimestamp(),
+      'status': 'pending',
+      'attempt': retryCount + 1,
+    };
 
-    print('🔑 Token: ${token.substring(0, 20)}...');
+    await _firestore.collection('notification_requests').add(notificationData);
 
-    // Créer un client HTTP avec timeout
-    final client = http.Client();
+    print('✅ [Cloud Functions] Notification programmée');
     
-    try {
-      final response = await client.post(
-        Uri.parse('https://fcm.googleapis.com/fcm/send'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'key=$serverKey',
-          'Access-Control-Allow-Origin': '*',
-        },
-        body: jsonEncode({
-          'to': token,
-          'notification': {
-            'title': title,
-            'body': body,
-            'icon': '/icons/Icon-192.png',
-          },
-          'data': data,
-        }),
-      ).timeout(const Duration(seconds: 10));
-
-      print('📨 Status: ${response.statusCode}');
-      print('📨 Body: ${response.body}');
-      
-      if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-        if (responseData['success'] == 1) {
-          print('✅ FCM DIRECT: Succès!');
-        } else {
-          print('❌ FCM DIRECT: Échec - ${responseData['results']}');
-        }
-      } else {
-        print('❌ HTTP Error: ${response.statusCode}');
-      }
-    } finally {
-      client.close();
+    // Vérifier le traitement après un délai (optionnel)
+    if (retryCount == 0) {
+      _verifyNotificationProcessing(notificationData);
     }
-    
+
   } catch (e) {
-    print('❌ FCM DIRECT Erreur: $e');
+    print('❌ [Cloud Functions] Erreur: $e');
     
-    // Diagnostic détaillé
-    if (e is http.ClientException) {
-      print('🔍 ClientException - Problème réseau');
-    } else if (e is TimeoutException) {
-      print('🔍 Timeout - Serveur trop lent');
+    // Retry logic (max 3 tentatives)
+    if (retryCount < 3) {
+      print('🔄 [Cloud Functions] Nouvelle tentative dans 2 secondes...');
+      await Future.delayed(const Duration(seconds: 2));
+      await _sendNotificationViaFunction(
+        receiverTokens: receiverTokens,
+        title: title,
+        body: body,
+        data: data,
+        retryCount: retryCount + 1,
+      );
+    } else {
+      print('❌ [Cloud Functions] Échec après 3 tentatives');
+      await _saveNotificationError({
+        'tokens': receiverTokens,
+        'title': title,
+        'body': body,
+        'data': data,
+      } as Message, 'Failed after 3 retries: $e');
     }
-    
-    print('🔍 Stack trace: ${e.toString()}');
   }
+}
+
+// Vérification optionnelle que la notification est traitée
+void _verifyNotificationProcessing(Map<String, dynamic> notificationData) {
+  Future.delayed(const Duration(seconds: 10), () async {
+    try {
+      // Vérifier si le document a été supprimé (traitement réussi)
+      final docs = await _firestore
+          .collection('notification_requests')
+          .where('timestamp', isEqualTo: notificationData['timestamp'])
+          .limit(1)
+          .get();
+
+      if (docs.docs.isEmpty) {
+        print('✅ [Cloud Functions] Notification traitée avec succès');
+      } else {
+        print('⚠️ [Cloud Functions] Notification pas encore traitée');
+      }
+    } catch (e) {
+      print('🔍 [Cloud Functions] Erreur vérification: $e');
+    }
+  });
 }
 Future<void> _saveNotificationError(Message message, String error) async {
   try {
