@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:Joussour/firebase_options.dart';
 import 'package:Joussour/models/user_model.dart';
 import 'package:Joussour/screens/parent/parent_home.dart';
@@ -66,6 +67,8 @@ class AuthWrapper extends StatefulWidget {
 
 class _AuthWrapperState extends State<AuthWrapper> {
   bool _isFcmInitialized = false;
+  bool _checkingNotifications = false;
+  bool _notificationChecked = false; // 🔥 NOUVEAU: Éviter les vérifications répétées
 
   @override
   void initState() {
@@ -75,7 +78,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   Future<void> _initializeFCM() async {
     try {
-      // Vérifier si FCM est déjà initialisé
       if (!_isFcmInitialized) {
         await FCMService.initialize();
         setState(() {
@@ -86,8 +88,159 @@ class _AuthWrapperState extends State<AuthWrapper> {
     } catch (e) {
       print('❌ Erreur initialisation FCM dans AuthWrapper: $e');
       setState(() {
-        _isFcmInitialized = true; // Continuer même si FCM échoue
+        _isFcmInitialized = true;
       });
+    }
+  }
+
+  Future<void> _checkAndRequestNotifications(String userId) async {
+    // 🔥 EMPÊCHER LES VÉRIFICATIONS RÉPÉTÉES
+    if (_checkingNotifications || _notificationChecked) return;
+    
+    setState(() {
+      _checkingNotifications = true;
+    });
+
+    try {
+      print('🔍 Vérification token FCM pour: $userId');
+      
+      final tokenDoc = await FirebaseFirestore.instance
+          .collection('user_fcm_tokens')
+          .doc(userId)
+          .get();
+
+      final hasValidToken = tokenDoc.exists && 
+                          tokenDoc.data()?['token'] != null && 
+                          (tokenDoc.data()?['token'] as String).isNotEmpty &&
+                          (tokenDoc.data()?['token'] as String).length > 10;
+
+      if (!hasValidToken && mounted) {
+        print('⚠️ Token FCM manquant ou invalide pour: $userId');
+        
+        // 🔥 NAVIGATION UNE SEULE FOIS
+        _notificationChecked = true;
+        
+        await Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (context) => _buildNotificationPermissionScreen(userId),
+          ),
+          (route) => false, // Supprime toutes les routes précédentes
+        );
+        
+      } else {
+        print('✅ Token FCM valide présent pour: $userId');
+        _notificationChecked = true; // 🔥 MARQUER COMME VÉRIFIÉ
+      }
+    } catch (e) {
+      print('❌ Erreur vérification notifications: $e');
+      _notificationChecked = true; // 🔥 MÊME EN CAS D'ERREUR
+    } finally {
+      if (mounted) {
+        setState(() {
+          _checkingNotifications = false;
+        });
+      }
+    }
+  }
+
+  // 🔥 MÉTHODE SÉPARÉE POUR L'ÉCRAN DE NOTIFICATION
+  Widget _buildNotificationPermissionScreen(String userId) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.notifications_active,
+                size: 80,
+                color: Colors.blue,
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Activer les notifications',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Pour recevoir des notifications instantanées quand vous recevez de nouveaux messages',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 32),
+              ElevatedButton(
+                onPressed: () async {
+                  await _enableNotifications(userId);
+                  // 🔥 RETOUR À L'APPLICATION PRINCIPALE
+                  if (mounted) {
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (context) => _buildMainApp()),
+                      (route) => false,
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                child: const Text(
+                  'Activer les notifications',
+                  style: TextStyle(fontSize: 16),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextButton(
+                onPressed: () {
+                  _notificationChecked = true;
+                  if (mounted) {
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(builder: (context) => _buildMainApp()),
+                      (route) => false,
+                    );
+                  }
+                },
+                child: const Text(
+                  'Configurer plus tard',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _enableNotifications(String userId) async {
+    try {
+      await FCMService.initialize();
+      await FCMService.saveUserFCMToken(userId);
+      _notificationChecked = true;
+      print('✅ Notifications activées pour: $userId');
+    } catch (e) {
+      print('❌ Erreur activation notifications: $e');
+    }
+  }
+
+  // 🔥 CONSTRUCTION DE L'APPLICATION PRINCIPALE
+  Widget _buildMainApp() {
+    final userProvider = Provider.of<UserProvider>(context, listen: false);
+    final user = userProvider.user;
+    
+    if (user != null) {
+      return RoleBasedHome(user: user);
+    } else {
+      return const LoginScreen();
     }
   }
 
@@ -102,6 +255,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
         print('🔄 AuthWrapper - Provider user: ${userProvider.user?.email}');
         print('🔄 AuthWrapper - Provider loading: ${userProvider.isLoading}');
         print('🔄 AuthWrapper - FCM initialisé: $_isFcmInitialized');
+        print('🔄 AuthWrapper - Vérification notifications: $_checkingNotifications');
+        print('🔄 AuthWrapper - Notification déjà vérifiée: $_notificationChecked');
 
         // Écran de chargement
         if (authSnapshot.connectionState == ConnectionState.waiting || 
@@ -116,7 +271,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
         // CAS 1: Incohérence - Firebase a un user mais pas le Provider
         if (firebaseUser != null && providerUser == null) {
           print('⚠️ Incohérence: Firebase connecté mais Provider vide');
-          print('🔍 User ID: ${firebaseUser.uid}');
           _syncUserFromFirebase(firebaseUser.uid);
           return _buildLoadingScreen();
         }
@@ -134,10 +288,18 @@ class _AuthWrapperState extends State<AuthWrapper> {
         if (providerUser != null && firebaseUser != null) {
           print('✅ Utilisateur cohérent: ${providerUser.email} - Rôle: ${providerUser.role}');
           
-          // Sauvegarder le token FCM pour l'utilisateur connecté
+          // 🔥 VÉRIFIER LES NOTIFICATIONS UNE SEULE FOIS
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!_checkingNotifications && !_notificationChecked) {
+              _checkAndRequestNotifications(providerUser.uid);
+            }
+          });
+          
+          // 🔥 SAUVEGARDER LE TOKEN (sans déclencher de rebuild)
           _saveFCMTokenForUser(providerUser.uid);
           
-          return RoleBasedHome(user: providerUser);
+          // 🔥 RETOURNER DIRECTEMENT L'APPLICATION PRINCIPALE
+          return _buildMainApp();
         }
 
         // CAS 4: Déconnecté
@@ -148,6 +310,14 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 
   Widget _buildLoadingScreen() {
+    String loadingText = 'Chargement...';
+    
+    if (!_isFcmInitialized) {
+      loadingText = 'Initialisation des notifications...';
+    } else if (_checkingNotifications) {
+      loadingText = 'Configuration des notifications...';
+    }
+    
     return Scaffold(
       backgroundColor: Colors.white,
       body: Center(
@@ -157,7 +327,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
             const CircularProgressIndicator(),
             const SizedBox(height: 20),
             Text(
-              _isFcmInitialized ? 'Chargement...' : 'Initialisation des notifications...',
+              loadingText,
               style: const TextStyle(fontSize: 16, color: Colors.grey),
             ),
           ],
@@ -175,26 +345,14 @@ class _AuthWrapperState extends State<AuthWrapper> {
         print('✅ Synchronisation réussie: ${user.email}');
         Provider.of<UserProvider>(context, listen: false).setUser(user);
         
-        // Sauvegarder le token FCM après synchronisation
-        _saveFCMTokenForUser(user.uid);
+        // Réinitialiser le flag pour forcer une nouvelle vérification
+        _notificationChecked = false;
+        
       } else {
         print('⚠️ Synchronisation échouée - données non trouvées');
-        // Réessayer après un délai
-        await Future.delayed(const Duration(seconds: 2));
-        
-        final userRetry = await AuthService().getCurrentUser();
-        if (userRetry != null && mounted) {
-          print('✅ Synchronisation réussie au 2ème essai: ${userRetry.email}');
-          Provider.of<UserProvider>(context, listen: false).setUser(userRetry);
-          
-          // Sauvegarder le token FCM après synchronisation
-          _saveFCMTokenForUser(userRetry.uid);
-        } else {
-          print('❌ Échec définitif de synchronisation');
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            Provider.of<UserProvider>(context, listen: false).clearUser();
-          });
-        }
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Provider.of<UserProvider>(context, listen: false).clearUser();
+        });
       }
     } catch (e) {
       print('❌ Erreur synchronisation: $e');
@@ -207,7 +365,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
   Future<void> _saveFCMTokenForUser(String userId) async {
     try {
       await FCMService.saveUserFCMToken(userId);
-      print('✅ Token FCM sauvegardé pour l\'utilisateur: $userId');
+      print('✅ Token FCM sauvegardé pour: $userId');
     } catch (e) {
       print('❌ Erreur sauvegarde token FCM: $e');
     }

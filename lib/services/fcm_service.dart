@@ -58,28 +58,121 @@ class FCMService {
     print('Permissions utilisateur: ${settings.authorizationStatus}');
   }
 
+  // Dans services/fcm_service.dart
   static Future<void> saveUserFCMToken(String userId) async {
     try {
-      String? token = await _firebaseMessaging.getToken();
-      if (token != null && userId.isNotEmpty) {
-        await FirebaseFirestore.instance
-            .collection('user_fcm_tokens')
-            .doc(userId)
-            .set({
-              'token': token,
-              'userId': userId,
-              'createdAt': FieldValue.serverTimestamp(),
-              'platform': 'web',
-              'updatedAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
+      print('🔄 Début sauvegarde token FCM pour: $userId');
 
-        print('✅ Token FCM sauvegardé pour user: $userId');
+      // Attendre que Firebase Messaging soit prêt
+      await Future.delayed(const Duration(seconds: 1));
+
+      String? token = await _firebaseMessaging.getToken();
+      print('📱 Token FCM brut: $token');
+
+      if (token == null || token.isEmpty) {
+        print('❌ Token FCM vide ou null');
+        return;
       }
+
+      if (userId.isEmpty) {
+        print('❌ UserId vide');
+        return;
+      }
+
+      // Vérifier la longueur du token
+      if (token.length < 10) {
+        print('❌ Token FCM trop court: $token');
+        return;
+      }
+
+      // Sauvegarder dans Firestore
+      await FirebaseFirestore.instance
+          .collection('user_fcm_tokens')
+          .doc(userId)
+          .set({
+            'token': token,
+            'userId': userId,
+            'createdAt': FieldValue.serverTimestamp(),
+            'platform': 'web',
+            'updatedAt': FieldValue.serverTimestamp(),
+            'tokenLength': token.length, // Pour debug
+          }, SetOptions(merge: true));
+
+      print('✅ Token FCM sauvegardé pour user: $userId');
+      print('🔑 Token (${token.length} chars): ${token.substring(0, 20)}...');
     } catch (e) {
       print('❌ Erreur sauvegarde token FCM: $e');
+      print('🔍 Stack trace: ${e.toString()}');
     }
   }
+// Dans services/fcm_service.dart - Ajoutez cette méthode
+static Future<void> fixMissingTokens() async {
+  try {
+    print('🚨 Début correction tokens manquants...');
+    
+    // Récupérer tous les utilisateurs
+    final usersSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .get();
 
+    int fixedCount = 0;
+    int missingCount = 0;
+    
+    for (final userDoc in usersSnapshot.docs) {
+      final userId = userDoc.id;
+      final userData = userDoc.data();
+      
+      // Vérifier si l'utilisateur a un token
+      final tokenDoc = await FirebaseFirestore.instance
+          .collection('user_fcm_tokens')
+          .doc(userId)
+          .get();
+
+      final hasValidToken = tokenDoc.exists && 
+                          tokenDoc.data()?['token'] != null && 
+                          (tokenDoc.data()?['token'] as String).isNotEmpty &&
+                          (tokenDoc.data()?['token'] as String).length > 10;
+
+      if (!hasValidToken) {
+        print('⚠️ Token manquant pour: $userId (${userData['email']})');
+        missingCount++;
+        
+        // Marquer pour régénération
+        await FirebaseFirestore.instance
+            .collection('fcm_token_requests')
+            .doc(userId)
+            .set({
+              'userId': userId,
+              'email': userData['email'],
+              'requestedAt': FieldValue.serverTimestamp(),
+              'status': 'pending',
+              'attempts': 0,
+              'role': userData['role']
+            }, SetOptions(merge: true));
+        
+        fixedCount++;
+      }
+    }
+    
+    print('✅ Correction terminée: $missingCount tokens manquants, $fixedCount marqués pour régénération');
+    
+    if (missingCount > 0) {
+      // Créer une notification pour l'admin
+      await FirebaseFirestore.instance
+          .collection('admin_alerts')
+          .doc()
+          .set({
+            'type': 'missing_fcm_tokens',
+            'message': '$missingCount utilisateurs sans token FCM',
+            'timestamp': FieldValue.serverTimestamp(),
+            'priority': 'medium'
+          });
+    }
+    
+  } catch (e) {
+    print('❌ Erreur correction tokens: $e');
+  }
+}
   // Configurer les handlers de messages
   static Future<void> _setupMessageHandlers() async {
     // Message en foreground
