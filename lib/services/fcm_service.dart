@@ -9,9 +9,6 @@ import 'package:firebase_core/firebase_core.dart';
 class FCMService {
   static final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
   static final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
-  
-  // 🔥 NOUVEAU : Suivi des notifications pour éviter les doublons
-  static final Set<String> _displayedNotificationIds = {};
 
   // Initialisation de FCM
   static Future<void> initialize() async {
@@ -57,9 +54,9 @@ class FCMService {
     try {
       // Canal pour les sanctions
       const AndroidNotificationChannel sanctionsChannel = AndroidNotificationChannel(
-        'sanctions_channel',
-        'Notifications de sanctions',
-        description: 'Notifications pour les nouvelles sanctions et alertes',
+        'sanctions_channel', // id
+        'Notifications de sanctions', // name
+        description: 'Notifications pour les nouvelles sanctions et alertes', // description
         importance: Importance.max,
         playSound: true,
         enableVibration: true,
@@ -67,9 +64,9 @@ class FCMService {
 
       // Canal pour les messages
       const AndroidNotificationChannel chatChannel = AndroidNotificationChannel(
-        'chat_channel',
-        'Messages de chat',
-        description: 'Notifications pour les nouveaux messages',
+        'chat_channel', // id
+        'Messages de chat', // name
+        description: 'Notifications pour les nouveaux messages', // description
         importance: Importance.max,
         playSound: true,
         enableVibration: true,
@@ -145,6 +142,62 @@ class FCMService {
     }
   }
 
+  static Future<void> fixMissingTokens() async {
+    try {
+      print('🚨 Début correction tokens manquants...');
+      final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
+      int fixedCount = 0;
+      int missingCount = 0;
+
+      for (final userDoc in usersSnapshot.docs) {
+        final userId = userDoc.id;
+        final userData = userDoc.data();
+
+        final tokenDoc = await FirebaseFirestore.instance
+            .collection('user_fcm_tokens')
+            .doc(userId)
+            .get();
+
+        final hasValidToken = tokenDoc.exists &&
+            tokenDoc.data()?['token'] != null &&
+            (tokenDoc.data()?['token'] as String).isNotEmpty &&
+            (tokenDoc.data()?['token'] as String).length > 10;
+
+        if (!hasValidToken) {
+          print('⚠️ Token manquant pour: $userId (${userData['email']})');
+          missingCount++;
+
+          await FirebaseFirestore.instance
+              .collection('fcm_token_requests')
+              .doc(userId)
+              .set({
+                'userId': userId,
+                'email': userData['email'],
+                'requestedAt': FieldValue.serverTimestamp(),
+                'status': 'pending',
+                'attempts': 0,
+                'role': userData['role'],
+              }, SetOptions(merge: true));
+
+          fixedCount++;
+        }
+      }
+
+      print('✅ Correction terminée: $missingCount tokens manquants, $fixedCount marqués');
+
+      if (missingCount > 0) {
+        await FirebaseFirestore.instance.collection('admin_alerts').doc().set({
+          'type': 'missing_fcm_tokens',
+          'message': '$missingCount utilisateurs sans token FCM',
+          'timestamp': FieldValue.serverTimestamp(),
+          'priority': 'medium',
+        });
+      }
+    } catch (e) {
+      print('❌ Erreur correction tokens: $e');
+    }
+  }
+
   // Configurer les handlers de messages
   static Future<void> _setupMessageHandlers() async {
     // Message en foreground
@@ -153,19 +206,7 @@ class FCMService {
       print('   - Titre: ${message.notification?.title}');
       print('   - Body: ${message.notification?.body}');
       print('   - Data: ${message.data}');
-      
-      // 🔥 EMPÊCHER LES DOUBLONS : Vérifier si c'est une notification de sanction
-      if (message.data['type'] == 'sanction') {
-        final notificationId = 'sanction_${message.data['studentId']}_${message.data['timestamp']}';
-        if (!_displayedNotificationIds.contains(notificationId)) {
-          _displayedNotificationIds.add(notificationId);
-          _showLocalNotification(message);
-        } else {
-          print('🚫 Notification doublon ignorée: $notificationId');
-        }
-      } else {
-        _showLocalNotification(message);
-      }
+      _showLocalNotification(message);
     });
 
     // Message en background
@@ -234,18 +275,15 @@ class FCMService {
         iOS: iosPlatformChannelSpecifics,
       );
 
-      // 🔥 ID UNIQUE pour éviter les doublons
-      final notificationId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
-
       await _notificationsPlugin.show(
-        notificationId,
+        DateTime.now().millisecondsSinceEpoch.remainder(100000),
         message.notification?.title ?? 'Nouvelle notification',
         message.notification?.body ?? 'Vous avez une nouvelle notification',
         platformChannelSpecifics,
         payload: json.encode(message.data),
       );
 
-      print('✅ Notification locale affichée sur le canal: $channelId (ID: $notificationId)');
+      print('✅ Notification locale affichée sur le canal: $channelId');
     } catch (e) {
       print('❌ Erreur affichage notification locale: $e');
     }
@@ -285,7 +323,7 @@ class FCMService {
     await _firebaseMessaging.deleteToken();
   }
 
-  // 🔥 MÉTHODE CORRIGÉE : Envoyer notification de sanction SANS doublon
+  // 🔥 MÉTHODE CORRIGÉE : Envoyer notification de sanction
   static Future<void> sendSanctionNotification({
     required String studentId,
     required String studentName,
@@ -339,7 +377,7 @@ class FCMService {
         'click_action': 'FLUTTER_NOTIFICATION_CLICK',
       };
 
-      // 3. Envoyer via Firebase Functions (SEULEMENT CECI)
+      // 3. Envoyer via Firebase Functions
       await FirebaseFirestore.instance
           .collection('notification_requests')
           .doc(DateTime.now().millisecondsSinceEpoch.toString())
@@ -355,8 +393,13 @@ class FCMService {
 
       print('✅ Notification sanction envoyée à Firestore');
 
-      // 🔥 SUPPRIMÉ : L'appel à _showLocalNotificationForSanction
-      // Pour éviter les doublons, on laisse seulement Firebase Functions gérer l'envoi
+      // 4. Afficher une notification locale IMMÉDIATEMENT (pour test)
+      await _showLocalNotificationForSanction(
+        studentName: studentName,
+        sanctionType: sanctionType,
+        reason: reason,
+        data: notificationData,
+      );
 
     } catch (e) {
       print('❌ ERREUR CRITIQUE envoi notification sanction: $e');
@@ -364,7 +407,7 @@ class FCMService {
     }
   }
 
-  // 🔥 CONSERVER cette méthode pour les tests manuels uniquement
+  // Notification locale pour sanction
   static Future<void> _showLocalNotificationForSanction({
     required String studentName,
     required String sanctionType,
@@ -399,17 +442,15 @@ class FCMService {
         iOS: iosPlatformChannelSpecifics,
       );
 
-      final notificationId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
-
       await _notificationsPlugin.show(
-        notificationId,
+        DateTime.now().millisecondsSinceEpoch.remainder(100000),
         '⚖️ Sanction - $studentName',
         '$sanctionType: $reason',
         platformChannelSpecifics,
         payload: json.encode(data),
       );
 
-      print('✅ Notification locale SANCTION affichée (ID: $notificationId)');
+      print('✅ Notification locale SANCTION affichée');
     } catch (e) {
       print('❌ Erreur notification locale sanction: $e');
     }
@@ -455,11 +496,78 @@ class FCMService {
     }
   }
 
-  // 🔥 NETTOYAGE périodique des IDs pour éviter l'accumulation
-  static void cleanupDisplayedNotifications() {
-    if (_displayedNotificationIds.length > 100) {
-      _displayedNotificationIds.clear();
-      print('🧹 Nettoyage des IDs de notification');
+  // 🔥 NOUVELLES MÉTHODES POUR LE DIAGNOSTIC
+  static Future<void> diagnoseAllTokens() async {
+    try {
+      print('🔍 DIAGNOSTIC COMPLET DES TOKENS FCM');
+      
+      final tokensSnapshot = await FirebaseFirestore.instance
+          .collection('user_fcm_tokens')
+          .get();
+
+      print('📊 Total tokens en base: ${tokensSnapshot.docs.length}');
+      
+      for (final doc in tokensSnapshot.docs) {
+        final data = doc.data();
+        final userId = doc.id;
+        final token = data['token'];
+        final createdAt = data['createdAt'];
+        
+        print('\n👤 User: $userId');
+        print('   🔑 Token: ${token != null ? '${token.substring(0, 30)}...' : 'NULL'}');
+        print('   📅 Créé: $createdAt');
+        print('   📏 Longueur: ${token?.length ?? 0}');
+        
+        if (token == null || token.isEmpty) {
+          print('   ❌ TOKEN VIDE');
+        } else if (token.length < 100) {
+          print('   ❌ TOKEN TROP COURT');
+        } else if (!token.startsWith('f')) {
+          print('   ❌ FORMAT INVALIDE');
+        } else {
+          print('   ✅ TOKEN APPAREMENT VALIDE');
+        }
+      }
+      
+    } catch (e) {
+      print('❌ Erreur diagnostic tokens: $e');
+    }
+  }
+
+  static Future<void> checkTokenOwner(String parentId) async {
+    try {
+      print('👤 VÉRIFICATION PROPRIÉTAIRE DU TOKEN: $parentId');
+      
+      final parentDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(parentId)
+          .get();
+
+      if (parentDoc.exists) {
+        final parentData = parentDoc.data()!;
+        print('   📧 Email: ${parentData['email']}');
+        print('   📛 Nom: ${parentData['firstName']} ${parentData['lastName']}');
+        print('   🎯 Rôle: ${parentData['role']}');
+      } else {
+        print('   ❌ Utilisateur non trouvé');
+      }
+    } catch (e) {
+      print('❌ Erreur vérification propriétaire: $e');
+    }
+  }
+
+  static Future<void> checkNotificationPermissions() async {
+    try {
+      final settings = await _firebaseMessaging.getNotificationSettings();
+      
+      print('🔔 ÉTAT DES PERMISSIONS:');
+      print('   📱 Authorization: ${settings.authorizationStatus}');
+      print('   🔔 Alert: ${settings.alert}');
+      print('   🔴 Badge: ${settings.badge}');
+      print('   🔊 Sound: ${settings.sound}');
+      
+    } catch (e) {
+      print('❌ Erreur vérification permissions: $e');
     }
   }
 }

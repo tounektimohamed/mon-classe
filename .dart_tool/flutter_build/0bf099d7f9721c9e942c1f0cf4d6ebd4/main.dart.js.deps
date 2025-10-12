@@ -1754,6 +1754,7 @@ file:///home/tounekti/mon_classe_manegment/lib/models/sanction_model.dart
 file:///home/tounekti/mon_classe_manegment/lib/models/student_model.dart
 file:///home/tounekti/mon_classe_manegment/lib/models/user_model.dart
 file:///home/tounekti/mon_classe_manegment/lib/providers/user_provider.dart
+file:///home/tounekti/mon_classe_manegment/lib/screens/auth/forgot_password_screen.dart
 file:///home/tounekti/mon_classe_manegment/lib/screens/auth/login_screen.dart
 file:///home/tounekti/mon_classe_manegment/lib/screens/auth/parent_register_screen.dart
 file:///home/tounekti/mon_classe_manegment/lib/screens/auth/teacher_register_screen.dart
