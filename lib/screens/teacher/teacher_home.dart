@@ -1,4 +1,5 @@
 // screens/teacher/teacher_home.dart
+import 'package:Joussour/widgets/pwa_install_button.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -239,8 +240,142 @@ class _TeacherHomeState extends State<TeacherHome> with TickerProviderStateMixin
             onPressed: _showLogoutDialog,
             tooltip: 'Déconnexion',
           ),
+          
         ],
       ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            const DrawerHeader(
+              decoration: BoxDecoration(
+                color: Colors.blue,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Colors.white,
+                    child: Icon(
+                      Icons.person,
+                      color: Colors.blue,
+                      size: 30,
+                    ),
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    'Enseignant',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'Tableau de bord',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            
+            // 🔥 BOUTON D'INSTALLATION PWA
+            const PwaInstallButton(),
+            const Divider(),
+            
+            // Menu principal
+            ListTile(
+              leading: const Icon(Icons.dashboard, color: Colors.blue),
+              title: const Text('Tableau de bord'),
+              onTap: () {
+                setState(() => _currentIndex = 0);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.group, color: Colors.green),
+              title: const Text('Gestion des élèves'),
+              onTap: () {
+                setState(() => _currentIndex = 1);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.gavel, color: Colors.orange),
+              title: const Text('Sanctions'),
+              onTap: () {
+                setState(() => _currentIndex = 2);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.message, color: Colors.purple),
+              title: const Text('Messagerie'),
+              onTap: () {
+                setState(() => _currentIndex = 3);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.person, color: Colors.teal),
+              title: const Text('Profil'),
+              onTap: () {
+                setState(() => _currentIndex = 4);
+                Navigator.pop(context);
+              },
+            ),
+            const Divider(),
+            
+            // Section paramètres
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                'Paramètres',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings, color: Colors.grey),
+              title: const Text('Paramètres'),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Paramètres - Fonctionnalité à venir')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.help, color: Colors.grey),
+              title: const Text('Aide & Support'),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Aide & Support - Fonctionnalité à venir')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.info, color: Colors.grey),
+              title: const Text('À propos'),
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('À propos - Fonctionnalité à venir')),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+      
       body: _selectedClassId != null
           ? _buildScreenWithClass()
           : const NoClassScreen(),

@@ -1777,6 +1777,7 @@ file:///home/tounekti/mon_classe_manegment/lib/services/pwa_service.dart
 file:///home/tounekti/mon_classe_manegment/lib/services/storage_service.dart
 file:///home/tounekti/mon_classe_manegment/lib/widgets/announcement_card.dart
 file:///home/tounekti/mon_classe_manegment/lib/widgets/message_bubble.dart
+file:///home/tounekti/mon_classe_manegment/lib/widgets/pwa_install_button.dart
 file:///home/tounekti/mon_classe_manegment/lib/widgets/pwa_install_dialog.dart
 file:///home/tounekti/mon_classe_manegment/lib/widgets/student_sanction_badge.dart
 org-dartlang-sdk:///dart-sdk/lib/_http/crypto.dart

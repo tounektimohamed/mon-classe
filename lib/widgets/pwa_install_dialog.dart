@@ -1,4 +1,4 @@
-// widgets/pwa_install_dialog.dart
+// widgets/pwa_install_dialog.dart - CORRECTION DES INSTRUCTIONS
 import 'package:flutter/material.dart';
 import 'package:Joussour/services/pwa_service.dart';
 
@@ -26,186 +26,146 @@ class _PwaInstallDialogState extends State<PwaInstallDialog> {
   }
 
   Future<void> _triggerInstall() async {
-    // Attendre un peu pour que l'animation se termine
     await Future.delayed(const Duration(milliseconds: 500));
   }
 
   void _handleInstall() async {
-    // Logique d'installation PWA
     _showInstallInstructions();
-    
-    if (widget.onInstall != null) {
-      widget.onInstall!();
-    }
+    widget.onInstall?.call();
   }
 
   void _handlePostpone() async {
     await PwaService.postponeInstall();
-    
-    if (mounted) {
-      Navigator.of(context).pop();
-    }
-    
-    if (widget.onDismiss != null) {
-      widget.onDismiss!();
-    }
+    if (mounted) Navigator.of(context).pop();
+    widget.onDismiss?.call();
   }
 
   void _handleDismiss() async {
     await PwaService.dismissInstall();
-    
-    if (mounted) {
-      Navigator.of(context).pop();
-    }
-    
-    if (widget.onDismiss != null) {
-      widget.onDismiss!();
-    }
+    if (mounted) Navigator.of(context).pop();
+    widget.onDismiss?.call();
   }
 
   void _showInstallInstructions() {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(20),
-            topRight: Radius.circular(20),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 20,
-              offset: const Offset(0, -5),
-            ),
-          ],
+      builder: (context) => ResponsiveInstallInstructions(
+        onClose: () => Navigator.pop(context),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final isSmallScreen = mediaQuery.size.width < 600;
+    final isLargeScreen = mediaQuery.size.width > 900;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
+      ),
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: isSmallScreen ? 16 : 24,
+        vertical: isSmallScreen ? 16 : 24,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: isLargeScreen ? 500 : double.infinity,
+          maxHeight: mediaQuery.size.height * 0.8,
         ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // En-tête
-                Row(
-                  children: [
-                    const Icon(Icons.install_desktop, 
-                      color: Colors.blue, size: 24),
-                    const SizedBox(width: 12),
-                    const Text(
-                      'Installer l\'application',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                
-                const SizedBox(height: 20),
-                
-                // Instructions selon le navigateur
-                _buildInstructionsForBrowser(),
-                
-                const SizedBox(height: 24),
-                
-                // Bouton compris
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      'J\'ai compris',
-                      style: TextStyle(fontSize: 16),
-                    ),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(isSmallScreen ? 16 : 20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildHeader(isSmallScreen),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
+                  child: Column(
+                    children: [
+                      _buildFeaturesSection(isSmallScreen),
+                      SizedBox(height: isSmallScreen ? 16 : 24),
+                      _buildActionButtons(isSmallScreen),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildInstructionsForBrowser() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Pour installer l\'application:',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+  Widget _buildHeader(bool isSmallScreen) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(isSmallScreen ? 20 : 24),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.blue.shade50, Colors.blue.shade100],
         ),
-        
-        const SizedBox(height: 16),
-        
-        // Instructions génériques
-        _buildInstructionStep(
-          '1. Cliquez sur le menu (⋯) en haut à droite',
-          Icons.more_vert,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(isSmallScreen ? 16 : 20),
+          topRight: Radius.circular(isSmallScreen ? 16 : 20),
         ),
-        
-        _buildInstructionStep(
-          '2. Sélectionnez "Installer l\'application"',
-          Icons.add_to_home_screen,
-        ),
-        
-        _buildInstructionStep(
-          '3. Confirmez l\'installation',
-          Icons.check_circle,
-        ),
-        
-        const SizedBox(height: 16),
-        
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.blue.shade50,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Text(
-            'L\'application sera ajoutée à votre écran d\'accueil '
-            'et fonctionnera comme une application native.',
-            style: TextStyle(
-              fontSize: 14,
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.blue.withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Icon(
+              Icons.install_desktop,
+              size: isSmallScreen ? 32 : 40,
               color: Colors.blue,
             ),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInstructionStep(String text, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: Colors.blue),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(fontSize: 14),
+          SizedBox(height: isSmallScreen ? 12 : 16),
+          Text(
+            'Installer l\'application',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: isSmallScreen ? 20 : 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue,
+            ),
+          ),
+          SizedBox(height: isSmallScreen ? 4 : 8),
+          Text(
+            'Pour une meilleure expérience',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: isSmallScreen ? 14 : 16,
+              color: Colors.blue,
             ),
           ),
         ],
@@ -213,217 +173,63 @@ class _PwaInstallDialogState extends State<PwaInstallDialog> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+  Widget _buildFeaturesSection(bool isSmallScreen) {
+    final features = [
+      _FeatureData(
+        Icons.rocket_launch,
+        'Lancement rapide',
+        'Démarrage instantané depuis l\'écran d\'accueil',
       ),
-      elevation: 0,
-      backgroundColor: Colors.transparent,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // En-tête avec image
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Colors.blue.shade50, Colors.blue.shade100],
-                ),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
-                ),
-              ),
-              child: Column(
-                children: [
-                  // Icône
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.3),
-                          blurRadius: 10,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.install_desktop,
-                      size: 40,
-                      color: Colors.blue,
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Titre
-                  const Text(
-                    'Installer l\'application',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  
-                  const SizedBox(height: 8),
-                  
-                  // Sous-titre
-                  const Text(
-                    'Pour une meilleure expérience',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.blue,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-            
-            // Contenu
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  // Avantages
-                  _buildFeature(
-                    Icons.rocket_launch,
-                    'Lancement rapide',
-                    'Démarrage instantané depuis l\'écran d\'accueil',
-                  ),
-                  
-                  _buildFeature(
-                    Icons.offline_bolt,
-                    'Mode hors ligne',
-                    'Fonctionne même sans connexion internet',
-                  ),
-                  
-                  _buildFeature(
-                    Icons.notifications_active,
-                    'Notifications push',
-                    'Recevez des alertes en temps réel',
-                  ),
-                  
-                  _buildFeature(
-                    Icons.security,
-                    'Sécurisé',
-                    'Données protégées et mise à jour automatique',
-                  ),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // Boutons d'action
-                  Row(
-                    children: [
-                      // Reporter
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _handlePostpone,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.grey,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            side: BorderSide(color: Colors.grey.shade300),
-                          ),
-                          child: const Text('Plus tard'),
-                        ),
-                      ),
-                      
-                      const SizedBox(width: 12),
-                      
-                      // Installer
-                      Expanded(
-                        child: FutureBuilder(
-                          future: _installFuture,
-                          builder: (context, snapshot) {
-                            return ElevatedButton(
-                              onPressed: _handleInstall,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              child: const Text(
-                                'Installer',
-                                style: TextStyle(fontSize: 16),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 12),
-                  
-                  // Ne plus afficher
-                  TextButton(
-                    onPressed: _handleDismiss,
-                    child: const Text(
-                      'Ne plus afficher',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+      _FeatureData(
+        Icons.offline_bolt,
+        'Mode hors ligne',
+        'Fonctionne même sans connexion internet',
       ),
+      _FeatureData(
+        Icons.notifications_active,
+        'Notifications push',
+        'Recevez des alertes en temps réel',
+      ),
+      _FeatureData(
+        Icons.security,
+        'Sécurisé',
+        'Données protégées et mise à jour automatique',
+      ),
+    ];
+
+    return Column(
+      children: features.map((feature) => _buildFeature(feature, isSmallScreen)).toList(),
     );
   }
 
-  Widget _buildFeature(IconData icon, String title, String description) {
+  Widget _buildFeature(_FeatureData feature, bool isSmallScreen) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: EdgeInsets.only(bottom: isSmallScreen ? 12 : 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 24, color: Colors.blue),
-          const SizedBox(width: 12),
+          Icon(
+            feature.icon,
+            size: isSmallScreen ? 20 : 24,
+            color: Colors.blue,
+          ),
+          SizedBox(width: isSmallScreen ? 8 : 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
+                  feature.title,
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 14 : 16,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 4),
+                SizedBox(height: isSmallScreen ? 2 : 4),
                 Text(
-                  description,
+                  feature.description,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: isSmallScreen ? 12 : 14,
                     color: Colors.grey.shade600,
                   ),
                 ),
@@ -434,4 +240,358 @@ class _PwaInstallDialogState extends State<PwaInstallDialog> {
       ),
     );
   }
+
+  Widget _buildActionButtons(bool isSmallScreen) {
+    return Column(
+      children: [
+        if (isSmallScreen)
+          Column(
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: FutureBuilder(
+                  future: _installFuture,
+                  builder: (context, snapshot) {
+                    return ElevatedButton(
+                      onPressed: _handleInstall,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(
+                          vertical: isSmallScreen ? 14 : 16,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'Voir comment installer',
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 14 : 16,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: _handlePostpone,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey,
+                    padding: EdgeInsets.symmetric(
+                      vertical: isSmallScreen ? 14 : 16,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    side: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  child: const Text('Plus tard'),
+                ),
+              ),
+            ],
+          )
+        else
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _handlePostpone,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.grey,
+                    padding: EdgeInsets.symmetric(
+                      vertical: isSmallScreen ? 14 : 16,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    side: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  child: const Text('Plus tard'),
+                ),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: FutureBuilder(
+                  future: _installFuture,
+                  builder: (context, snapshot) {
+                    return ElevatedButton(
+                      onPressed: _handleInstall,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(
+                          vertical: isSmallScreen ? 14 : 16,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'Voir comment installer',
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 14 : 16,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        SizedBox(height: isSmallScreen ? 8 : 12),
+        TextButton(
+          onPressed: _handleDismiss,
+          child: Text(
+            'Ne plus afficher',
+            style: TextStyle(
+              fontSize: isSmallScreen ? 12 : 14,
+              color: Colors.grey,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class ResponsiveInstallInstructions extends StatelessWidget {
+  final VoidCallback onClose;
+
+  const ResponsiveInstallInstructions({
+    super.key,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final isSmallScreen = mediaQuery.size.width < 600;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 20,
+            offset: const Offset(0, -5),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.all(isSmallScreen ? 16 : 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.install_desktop,
+                    color: Colors.blue,
+                    size: isSmallScreen ? 20 : 24,
+                  ),
+                  SizedBox(width: isSmallScreen ? 8 : 12),
+                  Expanded(
+                    child: Text(
+                      'Comment installer l\'application',
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 16 : 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.close,
+                      size: isSmallScreen ? 20 : 24,
+                    ),
+                    onPressed: onClose,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 40,
+                      minHeight: 40,
+                    ),
+                  ),
+                ],
+              ),
+              
+              SizedBox(height: isSmallScreen ? 16 : 20),
+              
+              // 🔥 INSTRUCTIONS CORRIGÉES ET AMÉLIORÉES
+              _buildBrowserSpecificInstructions(isSmallScreen),
+              
+              SizedBox(height: isSmallScreen ? 16 : 24),
+              
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: onClose,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(
+                      vertical: isSmallScreen ? 14 : 16,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Text(
+                    'J\'ai compris',
+                    style: TextStyle(
+                      fontSize: isSmallScreen ? 14 : 16,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBrowserSpecificInstructions(bool isSmallScreen) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Méthodes d\'installation selon votre navigateur:',
+          style: TextStyle(
+            fontSize: isSmallScreen ? 14 : 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        
+        SizedBox(height: isSmallScreen ? 12 : 16),
+        
+        // Chrome / Edge
+        _buildBrowserSection(
+          'Chrome / Edge (Android/Desktop)',
+          [
+            '1. Cherchez l\'icône 📥 "Télécharger" dans la barre d\'adresse',
+            '2. Ou allez dans le menu ⋯ → "Installer l\'application"',
+            '3. Cliquez sur "Installer" pour confirmer',
+          ],
+          isSmallScreen,
+        ),
+        
+        SizedBox(height: isSmallScreen ? 12 : 16),
+        
+        // Safari (iOS)
+        _buildBrowserSection(
+          'Safari (iPhone/iPad)',
+          [
+            '1. Cliquez sur l\'icône 📤 "Partager" en bas de l\'écran',
+            '2. Faites défiler et sélectionnez "Sur l\'écran d\'accueil"',
+            '3. Cliquez sur "Ajouter" pour confirmer',
+          ],
+          isSmallScreen,
+        ),
+        
+        SizedBox(height: isSmallScreen ? 12 : 16),
+        
+        // Firefox
+        _buildBrowserSection(
+          'Firefox (Android)',
+          [
+            '1. Allez dans le menu ⋯ en haut à droite',
+            '2. Sélectionnez "Installer" ou "Ajouter à l\'écran d\'accueil"',
+            '3. Confirmez l\'installation',
+          ],
+          isSmallScreen,
+        ),
+        
+        SizedBox(height: isSmallScreen ? 12 : 16),
+        
+        // Instructions générales
+        Container(
+          padding: EdgeInsets.all(isSmallScreen ? 10 : 12),
+          decoration: BoxDecoration(
+            color: Colors.green.shade50,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.lightbulb, size: 16, color: Colors.green),
+                  SizedBox(width: 6),
+                  Text(
+                    'Astuce',
+                    style: TextStyle(
+                      fontSize: isSmallScreen ? 12 : 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 4),
+              Text(
+                'L\'icône d\'installation peut apparaître à différents endroits selon votre navigateur et appareil. '
+                'Cherchez les icônes comme 📥, 📤, ⋯ ou "Installer".',
+                style: TextStyle(
+                  fontSize: isSmallScreen ? 11 : 13,
+                  color: Colors.green.shade800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBrowserSection(String browserName, List<String> steps, bool isSmallScreen) {
+    return Container(
+      padding: EdgeInsets.all(isSmallScreen ? 10 : 12),
+      decoration: BoxDecoration(
+        color: Colors.blue.shade50,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            browserName,
+            style: TextStyle(
+              fontSize: isSmallScreen ? 13 : 15,
+              fontWeight: FontWeight.w600,
+              color: Colors.blue.shade800,
+            ),
+          ),
+          SizedBox(height: 6),
+          ...steps.map((step) => Padding(
+            padding: EdgeInsets.only(bottom: 4),
+            child: Text(
+              step,
+              style: TextStyle(
+                fontSize: isSmallScreen ? 11 : 13,
+                color: Colors.blue.shade700,
+              ),
+            ),
+          )).toList(),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeatureData {
+  final IconData icon;
+  final String title;
+  final String description;
+
+  const _FeatureData(this.icon, this.title, this.description);
 }

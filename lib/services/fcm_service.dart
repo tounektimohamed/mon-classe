@@ -9,6 +9,9 @@ import 'package:firebase_core/firebase_core.dart';
 class FCMService {
   static final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
   static final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
+  
+  // 🔥 NOUVEAU : Suivi des notifications pour éviter les doublons
+  static final Set<String> _displayedNotificationIds = {};
 
   // Initialisation de FCM
   static Future<void> initialize() async {
@@ -49,28 +52,25 @@ class FCMService {
     await debugFCMConfiguration();
   }
 
-  // 🔥 NOUVELLE MÉTHODE : Créer les canaux de notification
+  // 🔥 CORRIGÉ : Créer les canaux de notification
   static Future<void> _createNotificationChannels() async {
     try {
       // Canal pour les sanctions
-      final AndroidNotificationDetails sanctionsChannel = AndroidNotificationDetails(
+      const AndroidNotificationChannel sanctionsChannel = AndroidNotificationChannel(
         'sanctions_channel',
         'Notifications de sanctions',
-        channelDescription: 'Notifications pour les nouvelles sanctions et alertes',
+        description: 'Notifications pour les nouvelles sanctions et alertes',
         importance: Importance.max,
-        priority: Priority.high,
         playSound: true,
         enableVibration: true,
-        vibrationPattern: Int64List.fromList(const [0, 500, 200, 500]),
       );
 
       // Canal pour les messages
-      const AndroidNotificationDetails chatChannel = AndroidNotificationDetails(
+      const AndroidNotificationChannel chatChannel = AndroidNotificationChannel(
         'chat_channel',
         'Messages de chat',
-        channelDescription: 'Notifications pour les nouveaux messages',
+        description: 'Notifications pour les nouveaux messages',
         importance: Importance.max,
-        priority: Priority.high,
         playSound: true,
         enableVibration: true,
       );
@@ -78,8 +78,8 @@ class FCMService {
       final androidPlugin = _notificationsPlugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
       
       if (androidPlugin != null) {
-        await androidPlugin.createNotificationChannel(sanctionsChannel as AndroidNotificationChannel);
-        await androidPlugin.createNotificationChannel(chatChannel as AndroidNotificationChannel);
+        await androidPlugin.createNotificationChannel(sanctionsChannel);
+        await androidPlugin.createNotificationChannel(chatChannel);
         print('✅ Canaux de notification créés: sanctions_channel, chat_channel');
       }
     } catch (e) {
@@ -145,62 +145,6 @@ class FCMService {
     }
   }
 
-  static Future<void> fixMissingTokens() async {
-    try {
-      print('🚨 Début correction tokens manquants...');
-      final usersSnapshot = await FirebaseFirestore.instance.collection('users').get();
-      int fixedCount = 0;
-      int missingCount = 0;
-
-      for (final userDoc in usersSnapshot.docs) {
-        final userId = userDoc.id;
-        final userData = userDoc.data();
-
-        final tokenDoc = await FirebaseFirestore.instance
-            .collection('user_fcm_tokens')
-            .doc(userId)
-            .get();
-
-        final hasValidToken = tokenDoc.exists &&
-            tokenDoc.data()?['token'] != null &&
-            (tokenDoc.data()?['token'] as String).isNotEmpty &&
-            (tokenDoc.data()?['token'] as String).length > 10;
-
-        if (!hasValidToken) {
-          print('⚠️ Token manquant pour: $userId (${userData['email']})');
-          missingCount++;
-
-          await FirebaseFirestore.instance
-              .collection('fcm_token_requests')
-              .doc(userId)
-              .set({
-                'userId': userId,
-                'email': userData['email'],
-                'requestedAt': FieldValue.serverTimestamp(),
-                'status': 'pending',
-                'attempts': 0,
-                'role': userData['role'],
-              }, SetOptions(merge: true));
-
-          fixedCount++;
-        }
-      }
-
-      print('✅ Correction terminée: $missingCount tokens manquants, $fixedCount marqués');
-
-      if (missingCount > 0) {
-        await FirebaseFirestore.instance.collection('admin_alerts').doc().set({
-          'type': 'missing_fcm_tokens',
-          'message': '$missingCount utilisateurs sans token FCM',
-          'timestamp': FieldValue.serverTimestamp(),
-          'priority': 'medium',
-        });
-      }
-    } catch (e) {
-      print('❌ Erreur correction tokens: $e');
-    }
-  }
-
   // Configurer les handlers de messages
   static Future<void> _setupMessageHandlers() async {
     // Message en foreground
@@ -209,7 +153,19 @@ class FCMService {
       print('   - Titre: ${message.notification?.title}');
       print('   - Body: ${message.notification?.body}');
       print('   - Data: ${message.data}');
-      _showLocalNotification(message);
+      
+      // 🔥 EMPÊCHER LES DOUBLONS : Vérifier si c'est une notification de sanction
+      if (message.data['type'] == 'sanction') {
+        final notificationId = 'sanction_${message.data['studentId']}_${message.data['timestamp']}';
+        if (!_displayedNotificationIds.contains(notificationId)) {
+          _displayedNotificationIds.add(notificationId);
+          _showLocalNotification(message);
+        } else {
+          print('🚫 Notification doublon ignorée: $notificationId');
+        }
+      } else {
+        _showLocalNotification(message);
+      }
     });
 
     // Message en background
@@ -249,7 +205,7 @@ class FCMService {
   // Afficher une notification locale
   static Future<void> _showLocalNotification(RemoteMessage message) async {
     try {
-      // 🔥 UTILISER LE BON CANAL SELON LE TYPE
+      // 🔥 CORRIGÉ : Utiliser le bon canal selon le type
       String channelId = 'chat_channel';
       String channelName = 'Messages de chat';
       
@@ -258,10 +214,12 @@ class FCMService {
         channelName = 'Notifications de sanctions';
       }
 
-      const AndroidNotificationDetails androidPlatformChannelSpecifics = AndroidNotificationDetails(
-        'sanctions_channel', // 🔥 TOUJOURS SANCTIONS POUR LES TESTS
-        'Notifications de sanctions',
-        channelDescription: 'Notifications pour les nouvelles sanctions',
+      final AndroidNotificationDetails androidPlatformChannelSpecifics = AndroidNotificationDetails(
+        channelId,
+        channelName,
+        channelDescription: channelId == 'sanctions_channel' 
+            ? 'Notifications pour les nouvelles sanctions' 
+            : 'Notifications pour les nouveaux messages',
         importance: Importance.max,
         priority: Priority.high,
         showWhen: true,
@@ -271,20 +229,23 @@ class FCMService {
       );
 
       const DarwinNotificationDetails iosPlatformChannelSpecifics = DarwinNotificationDetails();
-      const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      final NotificationDetails platformChannelSpecifics = NotificationDetails(
         android: androidPlatformChannelSpecifics,
         iOS: iosPlatformChannelSpecifics,
       );
 
+      // 🔥 ID UNIQUE pour éviter les doublons
+      final notificationId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
+
       await _notificationsPlugin.show(
-        DateTime.now().millisecondsSinceEpoch.remainder(100000),
+        notificationId,
         message.notification?.title ?? 'Nouvelle notification',
         message.notification?.body ?? 'Vous avez une nouvelle notification',
         platformChannelSpecifics,
         payload: json.encode(message.data),
       );
 
-      print('✅ Notification locale affichée');
+      print('✅ Notification locale affichée sur le canal: $channelId (ID: $notificationId)');
     } catch (e) {
       print('❌ Erreur affichage notification locale: $e');
     }
@@ -324,7 +285,7 @@ class FCMService {
     await _firebaseMessaging.deleteToken();
   }
 
-  // 🔥 MÉTHODE CORRIGÉE : Envoyer notification de sanction
+  // 🔥 MÉTHODE CORRIGÉE : Envoyer notification de sanction SANS doublon
   static Future<void> sendSanctionNotification({
     required String studentId,
     required String studentName,
@@ -378,7 +339,7 @@ class FCMService {
         'click_action': 'FLUTTER_NOTIFICATION_CLICK',
       };
 
-      // 3. Envoyer via Firebase Functions
+      // 3. Envoyer via Firebase Functions (SEULEMENT CECI)
       await FirebaseFirestore.instance
           .collection('notification_requests')
           .doc(DateTime.now().millisecondsSinceEpoch.toString())
@@ -394,13 +355,8 @@ class FCMService {
 
       print('✅ Notification sanction envoyée à Firestore');
 
-      // 4. Afficher une notification locale IMMÉDIATEMENT (pour test)
-      await _showLocalNotificationForSanction(
-        studentName: studentName,
-        sanctionType: sanctionType,
-        reason: reason,
-        data: notificationData,
-      );
+      // 🔥 SUPPRIMÉ : L'appel à _showLocalNotificationForSanction
+      // Pour éviter les doublons, on laisse seulement Firebase Functions gérer l'envoi
 
     } catch (e) {
       print('❌ ERREUR CRITIQUE envoi notification sanction: $e');
@@ -408,7 +364,7 @@ class FCMService {
     }
   }
 
-  // Notification locale pour sanction
+  // 🔥 CONSERVER cette méthode pour les tests manuels uniquement
   static Future<void> _showLocalNotificationForSanction({
     required String studentName,
     required String sanctionType,
@@ -416,7 +372,7 @@ class FCMService {
     required Map<String, dynamic> data,
   }) async {
     try {
-      final AndroidNotificationDetails androidPlatformChannelSpecifics = AndroidNotificationDetails(
+      const AndroidNotificationDetails androidPlatformChannelSpecifics = AndroidNotificationDetails(
         'sanctions_channel',
         'Notifications de sanctions',
         channelDescription: 'Notifications pour les nouvelles sanctions',
@@ -438,20 +394,22 @@ class FCMService {
         presentSound: true,
       );
 
-      final NotificationDetails platformChannelSpecifics = NotificationDetails(
+      const NotificationDetails platformChannelSpecifics = NotificationDetails(
         android: androidPlatformChannelSpecifics,
         iOS: iosPlatformChannelSpecifics,
       );
 
+      final notificationId = DateTime.now().millisecondsSinceEpoch.remainder(100000);
+
       await _notificationsPlugin.show(
-        DateTime.now().millisecondsSinceEpoch.remainder(100000),
+        notificationId,
         '⚖️ Sanction - $studentName',
         '$sanctionType: $reason',
         platformChannelSpecifics,
         payload: json.encode(data),
       );
 
-      print('✅ Notification locale SANCTION affichée');
+      print('✅ Notification locale SANCTION affichée (ID: $notificationId)');
     } catch (e) {
       print('❌ Erreur notification locale sanction: $e');
     }
@@ -494,6 +452,14 @@ class FCMService {
       print('✅ Test notification locale terminé');
     } catch (e) {
       print('❌ Erreur test notification: $e');
+    }
+  }
+
+  // 🔥 NETTOYAGE périodique des IDs pour éviter l'accumulation
+  static void cleanupDisplayedNotifications() {
+    if (_displayedNotificationIds.length > 100) {
+      _displayedNotificationIds.clear();
+      print('🧹 Nettoyage des IDs de notification');
     }
   }
 }
