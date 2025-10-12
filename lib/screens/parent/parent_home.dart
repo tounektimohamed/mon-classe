@@ -1,4 +1,5 @@
 // screens/parent/parent_home.dart
+import 'package:Joussour/widgets/pwa_install_button.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:Joussour/models/message_model.dart';
@@ -225,6 +226,85 @@ class _ParentHomeState extends State<ParentHome> {
               onPressed: _showLogoutDialog,
             ),
           ],
+        ),
+        drawer: Drawer(
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              const DrawerHeader(
+                decoration: BoxDecoration(color: Colors.blue),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleAvatar(
+                      radius: 30,
+                      backgroundColor: Colors.white,
+                      child: Icon(Icons.person, color: Colors.blue, size: 30),
+                    ),
+                    SizedBox(height: 10),
+                    
+                    Text(
+                      'Tableau de bord',
+                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+
+              // 🔥 BOUTON D'INSTALLATION PWA
+              const PwaInstallButton(),
+              const Divider(),
+
+              // Section paramètres
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text(
+                  'Paramètres',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.settings, color: Colors.grey),
+                title: const Text('Paramètres'),
+                onTap: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Paramètres - Fonctionnalité à venir'),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.help, color: Colors.grey),
+                title: const Text('Aide & Support'),
+                onTap: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Aide & Support - Fonctionnalité à venir'),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.info, color: Colors.grey),
+                title: const Text('À propos'),
+                onTap: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('À propos - Fonctionnalité à venir'),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
         body: Center(
           child: Padding(

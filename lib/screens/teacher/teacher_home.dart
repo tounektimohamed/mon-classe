@@ -31,8 +31,8 @@ class TeacherHome extends StatefulWidget {
   State<TeacherHome> createState() => _TeacherHomeState();
 }
 
-class _TeacherHomeState extends State<TeacherHome> with TickerProviderStateMixin {
-
+class _TeacherHomeState extends State<TeacherHome>
+    with TickerProviderStateMixin {
   int _currentIndex = 0;
   String? _selectedClassId;
 
@@ -240,7 +240,6 @@ class _TeacherHomeState extends State<TeacherHome> with TickerProviderStateMixin
             onPressed: _showLogoutDialog,
             tooltip: 'Déconnexion',
           ),
-          
         ],
       ),
       drawer: Drawer(
@@ -248,20 +247,14 @@ class _TeacherHomeState extends State<TeacherHome> with TickerProviderStateMixin
           padding: EdgeInsets.zero,
           children: [
             const DrawerHeader(
-              decoration: BoxDecoration(
-                color: Colors.blue,
-              ),
+              decoration: BoxDecoration(color: Colors.blue),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   CircleAvatar(
                     radius: 30,
                     backgroundColor: Colors.white,
-                    child: Icon(
-                      Icons.person,
-                      color: Colors.blue,
-                      size: 30,
-                    ),
+                    child: Icon(Icons.person, color: Colors.blue, size: 30),
                   ),
                   SizedBox(height: 10),
                   Text(
@@ -274,19 +267,16 @@ class _TeacherHomeState extends State<TeacherHome> with TickerProviderStateMixin
                   ),
                   Text(
                     'Tableau de bord',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: Colors.white70, fontSize: 14),
                   ),
                 ],
               ),
             ),
-            
+
             // 🔥 BOUTON D'INSTALLATION PWA
             const PwaInstallButton(),
             const Divider(),
-            
+
             // Menu principal
             ListTile(
               leading: const Icon(Icons.dashboard, color: Colors.blue),
@@ -329,7 +319,7 @@ class _TeacherHomeState extends State<TeacherHome> with TickerProviderStateMixin
               },
             ),
             const Divider(),
-            
+
             // Section paramètres
             const Padding(
               padding: EdgeInsets.all(16.0),
@@ -348,7 +338,9 @@ class _TeacherHomeState extends State<TeacherHome> with TickerProviderStateMixin
               onTap: () {
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Paramètres - Fonctionnalité à venir')),
+                  const SnackBar(
+                    content: Text('Paramètres - Fonctionnalité à venir'),
+                  ),
                 );
               },
             ),
@@ -358,7 +350,9 @@ class _TeacherHomeState extends State<TeacherHome> with TickerProviderStateMixin
               onTap: () {
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Aide & Support - Fonctionnalité à venir')),
+                  const SnackBar(
+                    content: Text('Aide & Support - Fonctionnalité à venir'),
+                  ),
                 );
               },
             ),
@@ -368,14 +362,16 @@ class _TeacherHomeState extends State<TeacherHome> with TickerProviderStateMixin
               onTap: () {
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('À propos - Fonctionnalité à venir')),
+                  const SnackBar(
+                    content: Text('À propos - Fonctionnalité à venir'),
+                  ),
                 );
               },
             ),
           ],
         ),
       ),
-      
+
       body: _selectedClassId != null
           ? _buildScreenWithClass()
           : const NoClassScreen(),
@@ -457,6 +453,7 @@ class _TeacherHomeState extends State<TeacherHome> with TickerProviderStateMixin
     );
   }
 }
+
 class SanctionsTab extends StatelessWidget {
   final String classId;
 
@@ -464,11 +461,10 @@ class SanctionsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SanctionManagementScreen(classId: classId),
-    );
+    return Scaffold(body: SanctionManagementScreen(classId: classId));
   }
 }
+
 class NoClassScreen extends StatelessWidget {
   const NoClassScreen({super.key});
 
