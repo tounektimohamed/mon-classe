@@ -1,4 +1,5 @@
 import 'package:Joussour/services/fcm_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/sanction_model.dart';
@@ -48,7 +49,9 @@ class _AddSanctionDialogState extends State<AddSanctionDialog> {
       print('❌ Erreur chargement élèves: $e');
     }
   }
-Future<void> _submitSanction() async {
+
+
+  Future<void> _submitSanction() async {
   if (!_formKey.currentState!.validate()) return;
   if (_selectedStudent == null) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -84,15 +87,23 @@ Future<void> _submitSanction() async {
     // Ajouter la sanction à Firestore
     await _firestoreService.addSanction(sanction);
 
-    // 🔥 ENVOYER LA NOTIFICATION
-    await FCMService.sendSanctionNotification(
-      studentId: _selectedStudent!.id,
-      studentName: _selectedStudent!.fullName,
-      teacherName: '${user.firstName} ${user.lastName}',
-      sanctionType: _getTypeDisplay(_selectedType),
-      reason: _reasonController.text.trim(),
-      classId: widget.classId,
-    );
+    // 🔥 CORRECTION: Récupérer le parentId de l'élève avant d'envoyer la notification
+    final parentId = await _getStudentParentId(_selectedStudent!.id);
+    
+    if (parentId != null && parentId.isNotEmpty) {
+      // 🔥 ENVOYER LA NOTIFICATION AVEC LE parentId
+      await FCMService.sendSanctionNotification(
+        studentId: _selectedStudent!.id,
+        studentName: _selectedStudent!.fullName,
+        teacherName: '${user.firstName} ${user.lastName}',
+        sanctionType: _getTypeDisplay(_selectedType),
+        reason: _reasonController.text.trim(),
+        classId: widget.classId,
+        parentId: parentId, // 🔥 AJOUT DU parentId
+      );
+    } else {
+      print('⚠️ Aucun parent trouvé pour l\'élève: ${_selectedStudent!.fullName}');
+    }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -116,6 +127,29 @@ Future<void> _submitSanction() async {
     if (mounted) {
       setState(() => _isLoading = false);
     }
+  }
+}
+
+// 🔥 NOUVELLE MÉTHODE: Récupérer le parentId de l'élève
+Future<String?> _getStudentParentId(String studentId) async {
+  try {
+    final studentDoc = await FirebaseFirestore.instance
+        .collection('students')
+        .doc(studentId)
+        .get();
+
+    if (studentDoc.exists) {
+      final studentData = studentDoc.data()!;
+      final parentId = studentData['parentId'];
+      print('👨‍👦 Parent ID trouvé: $parentId pour élève: $studentId');
+      return parentId;
+    } else {
+      print('❌ Élève non trouvé: $studentId');
+      return null;
+    }
+  } catch (e) {
+    print('❌ Erreur récupération parentId: $e');
+    return null;
   }
 }
   Future<void> _selectDate(BuildContext context, bool isEndDate) async {
