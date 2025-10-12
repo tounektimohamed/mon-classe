@@ -30,61 +30,33 @@ class MessageService {
   }
 
   // Envoyer une notification push
+ 
  Future<void> _sendPushNotification(Message message) async {
   try {
-    print('🔍 [FCM] DÉBUT - Envoi notification à: ${message.receiverId}');
-    print('🔍 [FCM] Message ID: ${message.id}');
-    print('🔍 [FCM] Type: ${message.messageType}');
-    print('🔍 [FCM] Contenu: ${message.content}');
+    print('🔍 [FCM] Début envoi notification via Cloud Functions');
 
-    // Récupérer les tokens FCM du destinataire
-    print('🔍 [FCM] Recherche tokens pour: ${message.receiverId}');
+    // Récupérer les tokens du destinataire
     final receiverTokensSnapshot = await _firestore
         .collection('user_fcm_tokens')
         .where('userId', isEqualTo: message.receiverId)
         .get();
 
-    print('📊 [FCM] Documents trouvés: ${receiverTokensSnapshot.docs.length}');
-    
-    // Log détaillé des documents trouvés
-    for (var doc in receiverTokensSnapshot.docs) {
-      final data = doc.data();
-      print('📄 [FCM] Document ID: ${doc.id}');
-      print('👤 [FCM] UserID: ${data['userId']}');
-      print('🔑 [FCM] Token (début): ${data['token'] != null ? (data['token'] as String).substring(0, 20) + '...' : 'NULL'}');
-      print('📏 [FCM] Longueur token: ${data['token'] != null ? (data['token'] as String).length : 0}');
-      print('🖥️ [FCM] Plateforme: ${data['platform']}');
-      print('---');
-    }
-
     if (receiverTokensSnapshot.docs.isEmpty) {
-      print('❌ [FCM] Aucun token FCM trouvé pour ${message.receiverId}');
-      print('💡 [FCM] Conseil: Vérifiez que l\'utilisateur a autorisé les notifications');
-      
-      // Optionnel: forcer la régénération du token
-      await _requestFCMTokenRegeneration(message.receiverId);
+      print('ℹ️ Aucun token FCM trouvé pour ${message.receiverId}');
       return;
     }
 
     final tokens = receiverTokensSnapshot.docs
         .map((doc) => doc['token'] as String)
-        .where((token) => token != null && token.isNotEmpty && token.length > 10)
+        .where((token) => token.isNotEmpty && token.length > 10)
         .toList();
 
-    print('🎯 [FCM] Tokens valides après filtrage: ${tokens.length}');
-
     if (tokens.isEmpty) {
-      print('❌ [FCM] Aucun token FCM valide pour ${message.receiverId}');
-      print('💡 [FCM] Tokens peuvent être vides ou invalides');
+      print('❌ Aucun token valide pour ${message.receiverId}');
       return;
     }
 
-    // Log du premier token pour vérification
-    print('🔎 [FCM] Premier token (20 chars): ${tokens[0].substring(0, 20)}...');
-    print('📏 [FCM] Longueur token: ${tokens[0].length}');
-
-    // Récupérer les infos de l'expéditeur
-    print('🔍 [FCM] Récupération infos expéditeur: ${message.senderId}');
+    // Récupérer infos expéditeur
     final senderDoc = await _firestore
         .collection('users')
         .doc(message.senderId)
@@ -95,10 +67,7 @@ class MessageService {
         ? '${senderData['firstName']} ${senderData['lastName']}'
         : 'Utilisateur';
 
-    print('👤 [FCM] Expéditeur: $senderName');
-    print('📧 [FCM] Email: ${senderData?['email']}');
-
-    // Préparer les données de notification
+    // Préparer les données
     final notificationData = {
       'conversationId': '${message.senderId}_${message.receiverId}',
       'senderId': message.senderId,
@@ -107,40 +76,32 @@ class MessageService {
       'messageId': message.id,
       'messageType': message.messageType ?? 'text',
       'senderName': senderName,
-      'content': message.content.length > 50 ? '${message.content.substring(0, 50)}...' : message.content,
+      'content': message.content,
       'click_action': 'FLUTTER_NOTIFICATION_CLICK',
       'timestamp': DateTime.now().toIso8601String(),
     };
 
-    print('📦 [FCM] Données notification préparées:');
-    print('   🏷️  Titre: Nouveau message de $senderName');
-    print('   📝 Body: ${_getNotificationBody(message)}');
-    print('   🔗 Conversation: ${notificationData['conversationId']}');
-    print('   📱 Type: ${notificationData['messageType']}');
+    print('📤 Création document notification_requests');
+    
+    // UNIQUEMENT Cloud Functions - PAS d'envoi direct
+    await _firestore.collection('notification_requests').add({
+      'tokens': tokens,
+      'title': 'Nouveau message de $senderName',
+      'body': _getNotificationBody(message),
+      'data': notificationData,
+      'timestamp': FieldValue.serverTimestamp(),
+      'status': 'pending',
+    });
 
-    // Envoyer la notification via Cloud Functions
-    print('🚀 [FCM] ENVOI via Cloud Function...');
-    await _sendNotificationViaFunction(
-      receiverTokens: tokens,
-      title: 'Nouveau message de $senderName',
-      body: _getNotificationBody(message),
-      data: notificationData,
-    );
-
-    print('✅ [FCM] SUCCÈS - Notification envoyée à ${message.receiverId}');
-    print('✅ [FCM] Nombre de tokens utilisés: ${tokens.length}');
-    print('✅ [FCM] Message ID: ${message.id}');
+    print('✅ Notification programmée via Cloud Functions');
 
   } catch (e) {
-    print('❌ [FCM] ERREUR CRITIQUE lors de l\'envoi:');
-    print('❌ [FCM] Type d\'erreur: ${e.runtimeType}');
-    print('❌ [FCM] Message: $e');
-    print('🔍 [FCM] Stack trace: ${e.toString()}');
-    
-    // Sauvegarder l'erreur pour analyse
-    await _saveNotificationError(message, e.toString());
+    print('❌ Erreur envoi notification: $e');
   }
-}Future<void> _sendNotificationViaFunction({
+}
+
+// Supprimez complètement _sendNotificationViaFunction si elle existe encore
+ Future<void> _sendNotificationViaFunction({
   required List<String> receiverTokens,
   required String title,
   required String body,

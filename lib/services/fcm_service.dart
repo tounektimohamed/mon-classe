@@ -105,74 +105,75 @@ class FCMService {
       print('🔍 Stack trace: ${e.toString()}');
     }
   }
-// Dans services/fcm_service.dart - Ajoutez cette méthode
-static Future<void> fixMissingTokens() async {
-  try {
-    print('🚨 Début correction tokens manquants...');
-    
-    // Récupérer tous les utilisateurs
-    final usersSnapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .get();
 
-    int fixedCount = 0;
-    int missingCount = 0;
-    
-    for (final userDoc in usersSnapshot.docs) {
-      final userId = userDoc.id;
-      final userData = userDoc.data();
-      
-      // Vérifier si l'utilisateur a un token
-      final tokenDoc = await FirebaseFirestore.instance
-          .collection('user_fcm_tokens')
-          .doc(userId)
+  // Dans services/fcm_service.dart - Ajoutez cette méthode
+  static Future<void> fixMissingTokens() async {
+    try {
+      print('🚨 Début correction tokens manquants...');
+
+      // Récupérer tous les utilisateurs
+      final usersSnapshot = await FirebaseFirestore.instance
+          .collection('users')
           .get();
 
-      final hasValidToken = tokenDoc.exists && 
-                          tokenDoc.data()?['token'] != null && 
-                          (tokenDoc.data()?['token'] as String).isNotEmpty &&
-                          (tokenDoc.data()?['token'] as String).length > 10;
+      int fixedCount = 0;
+      int missingCount = 0;
 
-      if (!hasValidToken) {
-        print('⚠️ Token manquant pour: $userId (${userData['email']})');
-        missingCount++;
-        
-        // Marquer pour régénération
-        await FirebaseFirestore.instance
-            .collection('fcm_token_requests')
+      for (final userDoc in usersSnapshot.docs) {
+        final userId = userDoc.id;
+        final userData = userDoc.data();
+
+        // Vérifier si l'utilisateur a un token
+        final tokenDoc = await FirebaseFirestore.instance
+            .collection('user_fcm_tokens')
             .doc(userId)
-            .set({
-              'userId': userId,
-              'email': userData['email'],
-              'requestedAt': FieldValue.serverTimestamp(),
-              'status': 'pending',
-              'attempts': 0,
-              'role': userData['role']
-            }, SetOptions(merge: true));
-        
-        fixedCount++;
+            .get();
+
+        final hasValidToken =
+            tokenDoc.exists &&
+            tokenDoc.data()?['token'] != null &&
+            (tokenDoc.data()?['token'] as String).isNotEmpty &&
+            (tokenDoc.data()?['token'] as String).length > 10;
+
+        if (!hasValidToken) {
+          print('⚠️ Token manquant pour: $userId (${userData['email']})');
+          missingCount++;
+
+          // Marquer pour régénération
+          await FirebaseFirestore.instance
+              .collection('fcm_token_requests')
+              .doc(userId)
+              .set({
+                'userId': userId,
+                'email': userData['email'],
+                'requestedAt': FieldValue.serverTimestamp(),
+                'status': 'pending',
+                'attempts': 0,
+                'role': userData['role'],
+              }, SetOptions(merge: true));
+
+          fixedCount++;
+        }
       }
+
+      print(
+        '✅ Correction terminée: $missingCount tokens manquants, $fixedCount marqués pour régénération',
+      );
+
+      if (missingCount > 0) {
+        // Créer une notification pour l'admin
+        await FirebaseFirestore.instance.collection('admin_alerts').doc().set({
+          'type': 'missing_fcm_tokens',
+          'message': '$missingCount utilisateurs sans token FCM',
+          'timestamp': FieldValue.serverTimestamp(),
+          'priority': 'medium',
+        });
+      }
+    } catch (e) {
+      print('❌ Erreur correction tokens: $e');
     }
-    
-    print('✅ Correction terminée: $missingCount tokens manquants, $fixedCount marqués pour régénération');
-    
-    if (missingCount > 0) {
-      // Créer une notification pour l'admin
-      await FirebaseFirestore.instance
-          .collection('admin_alerts')
-          .doc()
-          .set({
-            'type': 'missing_fcm_tokens',
-            'message': '$missingCount utilisateurs sans token FCM',
-            'timestamp': FieldValue.serverTimestamp(),
-            'priority': 'medium'
-          });
-    }
-    
-  } catch (e) {
-    print('❌ Erreur correction tokens: $e');
   }
-}
+
   // Configurer les handlers de messages
   static Future<void> _setupMessageHandlers() async {
     // Message en foreground
@@ -247,24 +248,123 @@ static Future<void> fixMissingTokens() async {
   }
 
   // Gérer le clic sur la notification
-  static void _handleNotificationClick(String? payload) {
-    if (payload != null) {
-      try {
-        Map<String, dynamic> data = json.decode(payload);
+static void _handleNotificationClick(String? payload) {
+  if (payload != null) {
+    try {
+      Map<String, dynamic> data = json.decode(payload);
+      
+      // Gérer les notifications de chat
+      if (data['conversationId'] != null) {
         String? conversationId = data['conversationId'];
         String? senderId = data['senderId'];
-
-        // Naviguer vers l'écran de chat correspondant
-        // Vous devrez adapter cette partie selon votre architecture de navigation
         print('Navigation vers conversation: $conversationId');
-      } catch (e) {
-        print('Erreur traitement payload notification: $e');
       }
+      
+      // 🔥 Gérer les notifications de sanctions
+      else if (data['type'] == 'sanction') {
+        String? studentId = data['studentId'];
+        String? studentName = data['studentName'];
+        String? sanctionId = data['sanctionId'];
+        
+        print('Navigation vers détails sanction: $sanctionId');
+        // Vous pouvez naviguer vers l'écran des sanctions de l'élève
+        // ou afficher un dialog avec les détails
+        _showSanctionNotificationDialog(data);
+      }
+      
+    } catch (e) {
+      print('Erreur traitement payload notification: $e');
     }
   }
+}
 
+// 🔥 NOUVELLE MÉTHODE : Afficher les détails de la sanction
+static void _showSanctionNotificationDialog(Map<String, dynamic> data) {
+  // Utiliser un GlobalKey pour naviguer depuis n'importe où
+  // ou implémenter un système de navigation globale
+  print('📋 Détails sanction reçue:');
+  print('👨‍🎓 Élève: ${data['studentName']}');
+  print('📝 Type: ${data['sanctionTypeText']}');
+  print('🎯 Raison: ${data['reason']}');
+  print('👨‍🏫 Enseignant: ${data['teacherName']}');
+}
   // Se désabonner des notifications
   static Future<void> unsubscribeFromNotifications() async {
     await _firebaseMessaging.deleteToken();
+  }
+
+  // Dans services/fcm_service.dart
+  static Future<void> sendSanctionNotification({
+    required String studentId,
+    required String studentName,
+    required String teacherName,
+    required String sanctionType,
+    required String reason,
+    required String classId,
+  }) async {
+    try {
+      print('🚀 Envoi notification sanction pour: $studentName');
+
+      // Récupérer le token du parent de l'élève
+      final studentDoc = await FirebaseFirestore.instance
+          .collection('students')
+          .doc(studentId)
+          .get();
+
+      if (!studentDoc.exists) {
+        print('❌ Élève non trouvé: $studentId');
+        return;
+      }
+
+      final studentData = studentDoc.data()!;
+      final parentId = studentData['parentId'];
+
+      if (parentId == null || parentId.isEmpty) {
+        print('⚠️ Aucun parent associé à l\'élève: $studentId');
+        return;
+      }
+
+      // Récupérer le token FCM du parent
+      final tokenDoc = await FirebaseFirestore.instance
+          .collection('user_fcm_tokens')
+          .doc(parentId)
+          .get();
+
+      if (!tokenDoc.exists || tokenDoc.data()?['token'] == null) {
+        print('❌ Token FCM non trouvé pour le parent: $parentId');
+        return;
+      }
+
+      final String token = tokenDoc.data()!['token'];
+      final List<String> tokens = [token];
+
+      // Préparer les données de la notification
+      final notificationData = {
+        'type': 'sanction',
+        'studentId': studentId,
+        'studentName': studentName,
+        'teacherName': teacherName,
+        'sanctionType': sanctionType,
+        'reason': reason,
+        'classId': classId,
+        'timestamp': DateTime.now().millisecondsSinceEpoch.toString(),
+      };
+
+      // Envoyer via Firebase Functions
+      await FirebaseFirestore.instance
+          .collection('notification_requests')
+          .doc()
+          .set({
+            'tokens': tokens,
+            'title': 'Nouvelle sanction - $studentName',
+            'body': '$sanctionType: $reason',
+            'data': notificationData,
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+
+      print('✅ Notification sanction envoyée avec succès');
+    } catch (e) {
+      print('❌ Erreur envoi notification sanction: $e');
+    }
   }
 }

@@ -8,6 +8,8 @@ import 'package:Joussour/screens/parent/parent_home.dart';
 import 'package:Joussour/screens/teacher/teacher_home.dart';
 import 'package:Joussour/services/auth_service.dart';
 import 'package:Joussour/services/fcm_service.dart';
+import 'package:Joussour/services/pwa_service.dart';
+import 'package:Joussour/widgets/pwa_install_dialog.dart';
 import 'package:provider/provider.dart';
 import 'providers/user_provider.dart';
 import 'screens/auth/login_screen.dart';
@@ -68,12 +70,15 @@ class AuthWrapper extends StatefulWidget {
 class _AuthWrapperState extends State<AuthWrapper> {
   bool _isFcmInitialized = false;
   bool _checkingNotifications = false;
-  bool _notificationChecked = false; // 🔥 NOUVEAU: Éviter les vérifications répétées
+  bool _notificationChecked = false;
+  bool _pwaDialogShown = false;
+  bool _pwaChecked = false;
 
   @override
   void initState() {
     super.initState();
     _initializeFCM();
+    _trackUserSession();
   }
 
   Future<void> _initializeFCM() async {
@@ -93,8 +98,11 @@ class _AuthWrapperState extends State<AuthWrapper> {
     }
   }
 
+  Future<void> _trackUserSession() async {
+    await PwaService.trackUserSession();
+  }
+
   Future<void> _checkAndRequestNotifications(String userId) async {
-    // 🔥 EMPÊCHER LES VÉRIFICATIONS RÉPÉTÉES
     if (_checkingNotifications || _notificationChecked) return;
     
     setState(() {
@@ -117,23 +125,22 @@ class _AuthWrapperState extends State<AuthWrapper> {
       if (!hasValidToken && mounted) {
         print('⚠️ Token FCM manquant ou invalide pour: $userId');
         
-        // 🔥 NAVIGATION UNE SEULE FOIS
         _notificationChecked = true;
         
         await Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
             builder: (context) => _buildNotificationPermissionScreen(userId),
           ),
-          (route) => false, // Supprime toutes les routes précédentes
+          (route) => false,
         );
         
       } else {
         print('✅ Token FCM valide présent pour: $userId');
-        _notificationChecked = true; // 🔥 MARQUER COMME VÉRIFIÉ
+        _notificationChecked = true;
       }
     } catch (e) {
       print('❌ Erreur vérification notifications: $e');
-      _notificationChecked = true; // 🔥 MÊME EN CAS D'ERREUR
+      _notificationChecked = true;
     } finally {
       if (mounted) {
         setState(() {
@@ -143,7 +150,54 @@ class _AuthWrapperState extends State<AuthWrapper> {
     }
   }
 
-  // 🔥 MÉTHODE SÉPARÉE POUR L'ÉCRAN DE NOTIFICATION
+  Future<void> _checkPwaInstall() async {
+    if (_pwaChecked || _pwaDialogShown) return;
+
+    // Attendre que l'app soit chargée
+    await Future.delayed(const Duration(seconds: 3));
+    
+    if (!mounted) return;
+
+    final shouldShowPwa = await PwaService.shouldShowPromptWithConditions(
+      minSessionCount: 2,
+      minSessionDuration: const Duration(minutes: 1), // Réduit pour les tests
+    );
+
+    if (shouldShowPwa) {
+      setState(() {
+        _pwaDialogShown = true;
+        _pwaChecked = true;
+      });
+      
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showPwaInstallDialog();
+      });
+    } else {
+      _pwaChecked = true;
+    }
+  }
+
+  void _showPwaInstallDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => PwaInstallDialog(
+        onInstall: () {
+          print('✅ Utilisateur a choisi d\'installer la PWA');
+        },
+        onDismiss: () {
+          print('📅 Installation PWA reportée');
+        },
+      ),
+    ).then((_) {
+      if (mounted) {
+        setState(() {
+          _pwaDialogShown = false;
+        });
+      }
+    });
+  }
+
   Widget _buildNotificationPermissionScreen(String userId) {
     return Scaffold(
       backgroundColor: Colors.white,
@@ -180,7 +234,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
               ElevatedButton(
                 onPressed: () async {
                   await _enableNotifications(userId);
-                  // 🔥 RETOUR À L'APPLICATION PRINCIPALE
                   if (mounted) {
                     Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(builder: (context) => _buildMainApp()),
@@ -232,7 +285,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
     }
   }
 
-  // 🔥 CONSTRUCTION DE L'APPLICATION PRINCIPALE
   Widget _buildMainApp() {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final user = userProvider.user;
@@ -257,6 +309,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         print('🔄 AuthWrapper - FCM initialisé: $_isFcmInitialized');
         print('🔄 AuthWrapper - Vérification notifications: $_checkingNotifications');
         print('🔄 AuthWrapper - Notification déjà vérifiée: $_notificationChecked');
+        print('🔄 AuthWrapper - PWA dialog affiché: $_pwaDialogShown');
 
         // Écran de chargement
         if (authSnapshot.connectionState == ConnectionState.waiting || 
@@ -288,21 +341,33 @@ class _AuthWrapperState extends State<AuthWrapper> {
         if (providerUser != null && firebaseUser != null) {
           print('✅ Utilisateur cohérent: ${providerUser.email} - Rôle: ${providerUser.role}');
           
-          // 🔥 VÉRIFIER LES NOTIFICATIONS UNE SEULE FOIS
+          // VÉRIFIER LES NOTIFICATIONS UNE SEULE FOIS
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!_checkingNotifications && !_notificationChecked) {
               _checkAndRequestNotifications(providerUser.uid);
             }
           });
+
+          // VÉRIFIER PWA UNE SEULE FOIS
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!_pwaChecked && !_pwaDialogShown) {
+              _checkPwaInstall();
+            }
+          });
           
-          // 🔥 SAUVEGARDER LE TOKEN (sans déclencher de rebuild)
+          // SAUVEGARDER LE TOKEN FCM
           _saveFCMTokenForUser(providerUser.uid);
           
-          // 🔥 RETOURNER DIRECTEMENT L'APPLICATION PRINCIPALE
           return _buildMainApp();
         }
 
-        // CAS 4: Déconnecté
+        // CAS 4: Déconnecté - Vérifier PWA quand même
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!_pwaChecked && !_pwaDialogShown) {
+            _checkPwaInstall();
+          }
+        });
+
         print('🔒 Aucun utilisateur connecté - Affichage LoginScreen');
         return const LoginScreen();
       },
@@ -316,6 +381,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
       loadingText = 'Initialisation des notifications...';
     } else if (_checkingNotifications) {
       loadingText = 'Configuration des notifications...';
+    } else if (_pwaDialogShown) {
+      loadingText = 'Préparation de l\'application...';
     }
     
     return Scaffold(
@@ -330,6 +397,13 @@ class _AuthWrapperState extends State<AuthWrapper> {
               loadingText,
               style: const TextStyle(fontSize: 16, color: Colors.grey),
             ),
+            if (_pwaDialogShown) ...[
+              const SizedBox(height: 10),
+              const Text(
+                'Installation PWA en cours...',
+                style: TextStyle(fontSize: 14, color: Colors.blue),
+              ),
+            ],
           ],
         ),
       ),
@@ -345,8 +419,9 @@ class _AuthWrapperState extends State<AuthWrapper> {
         print('✅ Synchronisation réussie: ${user.email}');
         Provider.of<UserProvider>(context, listen: false).setUser(user);
         
-        // Réinitialiser le flag pour forcer une nouvelle vérification
+        // Réinitialiser les flags
         _notificationChecked = false;
+        _pwaChecked = false;
         
       } else {
         print('⚠️ Synchronisation échouée - données non trouvées');

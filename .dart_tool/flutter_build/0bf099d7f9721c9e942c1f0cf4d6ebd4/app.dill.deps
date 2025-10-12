@@ -722,6 +722,10 @@ file:///home/tounekti/.pub-cache/hosted/pub.dev/provider-6.1.5+1/lib/src/proxy_p
 file:///home/tounekti/.pub-cache/hosted/pub.dev/provider-6.1.5+1/lib/src/reassemble_handler.dart
 file:///home/tounekti/.pub-cache/hosted/pub.dev/provider-6.1.5+1/lib/src/selector.dart
 file:///home/tounekti/.pub-cache/hosted/pub.dev/provider-6.1.5+1/lib/src/value_listenable_provider.dart
+file:///home/tounekti/.pub-cache/hosted/pub.dev/shared_preferences-2.5.3/lib/shared_preferences.dart
+file:///home/tounekti/.pub-cache/hosted/pub.dev/shared_preferences-2.5.3/lib/src/shared_preferences_async.dart
+file:///home/tounekti/.pub-cache/hosted/pub.dev/shared_preferences-2.5.3/lib/src/shared_preferences_devtools_extension_data.dart
+file:///home/tounekti/.pub-cache/hosted/pub.dev/shared_preferences-2.5.3/lib/src/shared_preferences_legacy.dart
 file:///home/tounekti/.pub-cache/hosted/pub.dev/shared_preferences_platform_interface-2.4.1/lib/method_channel_shared_preferences.dart
 file:///home/tounekti/.pub-cache/hosted/pub.dev/shared_preferences_platform_interface-2.4.1/lib/shared_preferences_async_platform_interface.dart
 file:///home/tounekti/.pub-cache/hosted/pub.dev/shared_preferences_platform_interface-2.4.1/lib/shared_preferences_platform_interface.dart
@@ -1770,9 +1774,11 @@ file:///home/tounekti/mon_classe_manegment/lib/services/auth_service.dart
 file:///home/tounekti/mon_classe_manegment/lib/services/fcm_service.dart
 file:///home/tounekti/mon_classe_manegment/lib/services/firestore_service.dart
 file:///home/tounekti/mon_classe_manegment/lib/services/message_service.dart
+file:///home/tounekti/mon_classe_manegment/lib/services/pwa_service.dart
 file:///home/tounekti/mon_classe_manegment/lib/services/storage_service.dart
 file:///home/tounekti/mon_classe_manegment/lib/widgets/announcement_card.dart
 file:///home/tounekti/mon_classe_manegment/lib/widgets/message_bubble.dart
+file:///home/tounekti/mon_classe_manegment/lib/widgets/pwa_install_dialog.dart
 file:///home/tounekti/mon_classe_manegment/lib/widgets/student_sanction_badge.dart
 org-dartlang-sdk:///dart-sdk/lib/_http/crypto.dart
 org-dartlang-sdk:///dart-sdk/lib/_http/embedder_config.dart

@@ -1,3 +1,4 @@
+import 'package:Joussour/services/fcm_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/sanction_model.dart';
@@ -47,64 +48,76 @@ class _AddSanctionDialogState extends State<AddSanctionDialog> {
       print('❌ Erreur chargement élèves: $e');
     }
   }
-
-  Future<void> _submitSanction() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_selectedStudent == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Veuillez sélectionner un élève')),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      final user = Provider.of<UserProvider>(context, listen: false).user!;
-
-      final sanction = Sanction(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        studentId: _selectedStudent!.id,
-        studentName: _selectedStudent!.fullName,
-        classId: widget.classId,
-        teacherId: user.uid,
-        teacherName: '${user.firstName} ${user.lastName}',
-        type: _selectedType,
-        severity: _selectedSeverity,
-        reason: _reasonController.text.trim(),
-        details: _detailsController.text.trim().isNotEmpty
-            ? _detailsController.text.trim()
-            : null,
-        date: _selectedDate,
-        endDate: _endDate,
-        isActive: true,
-        createdAt: DateTime.now(),
-      );
-
-      await _firestoreService.addSanction(sanction);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Sanction ajoutée avec succès'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
+Future<void> _submitSanction() async {
+  if (!_formKey.currentState!.validate()) return;
+  if (_selectedStudent == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Veuillez sélectionner un élève')),
+    );
+    return;
   }
 
+  setState(() => _isLoading = true);
+
+  try {
+    final user = Provider.of<UserProvider>(context, listen: false).user!;
+
+    final sanction = Sanction(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      studentId: _selectedStudent!.id,
+      studentName: _selectedStudent!.fullName,
+      classId: widget.classId,
+      teacherId: user.uid,
+      teacherName: '${user.firstName} ${user.lastName}',
+      type: _selectedType,
+      severity: _selectedSeverity,
+      reason: _reasonController.text.trim(),
+      details: _detailsController.text.trim().isNotEmpty
+          ? _detailsController.text.trim()
+          : null,
+      date: _selectedDate,
+      endDate: _endDate,
+      isActive: true,
+      createdAt: DateTime.now(),
+    );
+
+    // Ajouter la sanction à Firestore
+    await _firestoreService.addSanction(sanction);
+
+    // 🔥 ENVOYER LA NOTIFICATION
+    await FCMService.sendSanctionNotification(
+      studentId: _selectedStudent!.id,
+      studentName: _selectedStudent!.fullName,
+      teacherName: '${user.firstName} ${user.lastName}',
+      sanctionType: _getTypeDisplay(_selectedType),
+      reason: _reasonController.text.trim(),
+      classId: widget.classId,
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sanction ajoutée avec succès'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context);
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erreur: $e'), 
+          backgroundColor: Colors.red
+        ),
+      );
+    }
+  } finally {
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+}
   Future<void> _selectDate(BuildContext context, bool isEndDate) async {
     final DateTime? picked = await showDatePicker(
       context: context,

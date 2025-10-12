@@ -163,52 +163,53 @@ class FirestoreService {
   }
 
   // SYSTÈME DE COMMENTAIRES
- Future<void> addComment({
-  required String announcementId,
-  required String userId,
-  required String userName,
-  required String content,
-  required String classId, // AJOUT IMPORTANT: besoin de classId
-}) async {
-  try {
-    print('💬 Ajout commentaire - Classe: $classId, Annonce: $announcementId, User: $userId');
-    
-    // CHEMIN CORRECT: classes/{classId}/announcements/{announcementId}
-    final announcementRef = _firestore
-        .collection('classes')
-        .doc(classId)
-        .collection('announcements')
-        .doc(announcementId);
+  Future<void> addComment({
+    required String announcementId,
+    required String userId,
+    required String userName,
+    required String content,
+    required String classId, // AJOUT IMPORTANT: besoin de classId
+  }) async {
+    try {
+      print(
+        '💬 Ajout commentaire - Classe: $classId, Annonce: $announcementId, User: $userId',
+      );
 
-    final doc = await announcementRef.get();
-    if (!doc.exists) {
-      throw Exception('Annonce non trouvée');
+      // CHEMIN CORRECT: classes/{classId}/announcements/{announcementId}
+      final announcementRef = _firestore
+          .collection('classes')
+          .doc(classId)
+          .collection('announcements')
+          .doc(announcementId);
+
+      final doc = await announcementRef.get();
+      if (!doc.exists) {
+        throw Exception('Annonce non trouvée');
+      }
+
+      final data = doc.data()!;
+      final comments = List<Map<String, dynamic>>.from(data['comments'] ?? []);
+
+      // Créer le nouveau commentaire
+      final newComment = Comment(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        userId: userId,
+        userName: userName,
+        content: content.trim(),
+        timestamp: DateTime.now(),
+        reactions: [],
+        replies: [],
+      ).toMap();
+
+      comments.add(newComment);
+
+      await announcementRef.update({'comments': comments});
+      print('✅ Commentaire ajouté avec succès');
+    } catch (e) {
+      print('❌ Erreur addComment: $e');
+      rethrow;
     }
-
-    final data = doc.data()!;
-    final comments = List<Map<String, dynamic>>.from(data['comments'] ?? []);
-
-    // Créer le nouveau commentaire
-    final newComment = Comment(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      userId: userId,
-      userName: userName,
-      content: content.trim(),
-      timestamp: DateTime.now(),
-      reactions: [],
-      replies: [],
-    ).toMap();
-
-    comments.add(newComment);
-
-    await announcementRef.update({'comments': comments});
-    print('✅ Commentaire ajouté avec succès');
-    
-  } catch (e) {
-    print('❌ Erreur addComment: $e');
-    rethrow;
   }
-}
 
   // RÉPONDRE À UN COMMENTAIRE
   Future<void> addReply({
@@ -284,30 +285,28 @@ class FirestoreService {
   }
 
   // SUPPRIMER UNE ANNONCE
- Future<void> deleteAnnouncement(String announcementId) async {
-  try {
-    // Cette méthode doit aussi chercher dans toutes les classes
-    // Pour l'instant, on lance une exception
-    throw Exception('Méthode deleteAnnouncement à implémenter avec classId');
-  } catch (e) {
-    print('❌ Erreur deleteAnnouncement: $e');
-    rethrow;
+  Future<void> deleteAnnouncement(String announcementId) async {
+    try {
+      // Cette méthode doit aussi chercher dans toutes les classes
+      // Pour l'instant, on lance une exception
+      throw Exception('Méthode deleteAnnouncement à implémenter avec classId');
+    } catch (e) {
+      print('❌ Erreur deleteAnnouncement: $e');
+      rethrow;
+    }
   }
-}
 
-Future<bool> isUserAuthor(String announcementId, String userId) async {
-  try {
-    // Cette méthode doit chercher dans toutes les classes
-    // Pour l'instant, retournons true pour tester
-    // Vous devrez implémenter la logique de recherche
-    return true;
-  } catch (e) {
-    print('❌ Erreur isUserAuthor: $e');
-    return false;
+  Future<bool> isUserAuthor(String announcementId, String userId) async {
+    try {
+      // Cette méthode doit chercher dans toutes les classes
+      // Pour l'instant, retournons true pour tester
+      // Vous devrez implémenter la logique de recherche
+      return true;
+    } catch (e) {
+      print('❌ Erreur isUserAuthor: $e');
+      return false;
+    }
   }
-}
-
-
 
   // Mettre à jour les pièces jointes d'une annonce
   Future<void> updateAnnouncementAttachments({
@@ -748,7 +747,7 @@ Future<bool> isUserAuthor(String announcementId, String userId) async {
     }
   }
 
-
+  // Dans services/firestore_service.dart
   Future<void> addSanction(Sanction sanction) async {
     try {
       await _firestore
@@ -757,6 +756,9 @@ Future<bool> isUserAuthor(String announcementId, String userId) async {
           .set(sanction.toMap());
 
       print('✅ Sanction ajoutée pour ${sanction.studentName}');
+
+      // Le trigger Cloud Functions se déclenche automatiquement
+      // grâce à la méthode onCreate sur la collection 'sanctions'
     } catch (e) {
       print('❌ Erreur ajout sanction: $e');
       rethrow;
@@ -764,41 +766,41 @@ Future<bool> isUserAuthor(String announcementId, String userId) async {
   }
 
   // Récupérer les sanctions d'un élève
- // Récupérer les sanctions d'un élève
-Stream<List<Sanction>> getStudentSanctions(String studentId) {
-  return _firestore
-      .collection('sanctions')
-      .where('studentId', isEqualTo: studentId)
-      .snapshots()
-      .map((snapshot) {
-        final sanctions = snapshot.docs
-            .map((doc) => Sanction.fromMap(doc.data()))
-            .toList();
+  // Récupérer les sanctions d'un élève
+  Stream<List<Sanction>> getStudentSanctions(String studentId) {
+    return _firestore
+        .collection('sanctions')
+        .where('studentId', isEqualTo: studentId)
+        .snapshots()
+        .map((snapshot) {
+          final sanctions = snapshot.docs
+              .map((doc) => Sanction.fromMap(doc.data()))
+              .toList();
 
-        // 🔹 Trier localement par date (du plus récent au plus ancien)
-        sanctions.sort((a, b) => b.date.compareTo(a.date));
+          // 🔹 Trier localement par date (du plus récent au plus ancien)
+          sanctions.sort((a, b) => b.date.compareTo(a.date));
 
-        return sanctions;
-      });
-}
+          return sanctions;
+        });
+  }
 
-// Récupérer les sanctions d'une classe
-Stream<List<Sanction>> getClassSanctions(String classId) {
-  return _firestore
-      .collection('sanctions')
-      .where('classId', isEqualTo: classId)
-      .snapshots()
-      .map((snapshot) {
-        final sanctions = snapshot.docs
-            .map((doc) => Sanction.fromMap(doc.data()))
-            .toList();
+  // Récupérer les sanctions d'une classe
+  Stream<List<Sanction>> getClassSanctions(String classId) {
+    return _firestore
+        .collection('sanctions')
+        .where('classId', isEqualTo: classId)
+        .snapshots()
+        .map((snapshot) {
+          final sanctions = snapshot.docs
+              .map((doc) => Sanction.fromMap(doc.data()))
+              .toList();
 
-        // 🔹 Trier localement par date (du plus récent au plus ancien)
-        sanctions.sort((a, b) => b.date.compareTo(a.date));
+          // 🔹 Trier localement par date (du plus récent au plus ancien)
+          sanctions.sort((a, b) => b.date.compareTo(a.date));
 
-        return sanctions;
-      });
-}
+          return sanctions;
+        });
+  }
 
   // Compter les sanctions actives d'un élève
   Future<int> getStudentActiveSanctionsCount(String studentId) async {
@@ -819,10 +821,9 @@ Stream<List<Sanction>> getClassSanctions(String classId) {
   // Marquer une sanction comme résolue
   Future<void> resolveSanction(String sanctionId) async {
     try {
-      await _firestore
-          .collection('sanctions')
-          .doc(sanctionId)
-          .update({'isActive': false});
+      await _firestore.collection('sanctions').doc(sanctionId).update({
+        'isActive': false,
+      });
 
       print('✅ Sanction marquée comme résolue: $sanctionId');
     } catch (e) {
@@ -834,10 +835,7 @@ Stream<List<Sanction>> getClassSanctions(String classId) {
   // Supprimer une sanction
   Future<void> deleteSanction(String sanctionId) async {
     try {
-      await _firestore
-          .collection('sanctions')
-          .doc(sanctionId)
-          .delete();
+      await _firestore.collection('sanctions').doc(sanctionId).delete();
 
       print('✅ Sanction supprimée: $sanctionId');
     } catch (e) {
@@ -845,76 +843,74 @@ Stream<List<Sanction>> getClassSanctions(String classId) {
       rethrow;
     }
   }
-// Obtenir les statistiques de sanctions d'une classe
-Future<Map<String, dynamic>> getClassSanctionsStats(String classId) async {
-  try {
-    final snapshot = await _firestore
-        .collection('sanctions')
-        .where('classId', isEqualTo: classId)
-        .get();
 
-    final sanctions = snapshot.docs
-        .map((doc) => Sanction.fromMap(doc.data()))
-        .toList();
+  // Obtenir les statistiques de sanctions d'une classe
+  Future<Map<String, dynamic>> getClassSanctionsStats(String classId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('sanctions')
+          .where('classId', isEqualTo: classId)
+          .get();
 
-    final activeSanctions = sanctions.where((s) => s.isValid).length;
-    final totalSanctions = sanctions.length;
+      final sanctions = snapshot.docs
+          .map((doc) => Sanction.fromMap(doc.data()))
+          .toList();
 
-    // 🔹 Compter par type (tous les types définis dans l'enum)
-    final remarqueOrales = sanctions
-        .where((s) => s.type == SanctionType.remarqueOrale)
-        .length;
-    final observations = sanctions
-        .where((s) => s.type == SanctionType.observationEcrite)
-        .length;
-    final travauxEducatifs = sanctions
-        .where((s) => s.type == SanctionType.travailEducatif)
-        .length;
-    final avertissements = sanctions
-        .where((s) => s.type == SanctionType.avertissement)
-        .length;
-    final tachesAide = sanctions
-        .where((s) => s.type == SanctionType.tacheAide)
-        .length;
-    final detentions = sanctions
-        .where((s) => s.type == SanctionType.detention)
-        .length;
-    final exclusions = sanctions
-        .where((s) => s.type == SanctionType.exclusion)
-        .length;
-    final autres = sanctions
-        .where((s) => s.type == SanctionType.autre)
-        .length;
+      final activeSanctions = sanctions.where((s) => s.isValid).length;
+      final totalSanctions = sanctions.length;
 
-    return {
-      'total': totalSanctions,
-      'active': activeSanctions,
-      'remarqueOrales': remarqueOrales,
-      'observations': observations,
-      'travauxEducatifs': travauxEducatifs,
-      'avertissements': avertissements,
-      'tachesAide': tachesAide,
-      'detentions': detentions,
-      'exclusions': exclusions,
-      'autres': autres,
-    };
-  } catch (e) {
-    print('❌ Erreur statistiques sanctions: $e');
-    return {
-      'total': 0,
-      'active': 0,
-      'remarqueOrales': 0,
-      'observations': 0,
-      'travauxEducatifs': 0,
-      'avertissements': 0,
-      'tachesAide': 0,
-      'detentions': 0,
-      'exclusions': 0,
-      'autres': 0,
-    };
+      // 🔹 Compter par type (tous les types définis dans l'enum)
+      final remarqueOrales = sanctions
+          .where((s) => s.type == SanctionType.remarqueOrale)
+          .length;
+      final observations = sanctions
+          .where((s) => s.type == SanctionType.observationEcrite)
+          .length;
+      final travauxEducatifs = sanctions
+          .where((s) => s.type == SanctionType.travailEducatif)
+          .length;
+      final avertissements = sanctions
+          .where((s) => s.type == SanctionType.avertissement)
+          .length;
+      final tachesAide = sanctions
+          .where((s) => s.type == SanctionType.tacheAide)
+          .length;
+      final detentions = sanctions
+          .where((s) => s.type == SanctionType.detention)
+          .length;
+      final exclusions = sanctions
+          .where((s) => s.type == SanctionType.exclusion)
+          .length;
+      final autres = sanctions
+          .where((s) => s.type == SanctionType.autre)
+          .length;
+
+      return {
+        'total': totalSanctions,
+        'active': activeSanctions,
+        'remarqueOrales': remarqueOrales,
+        'observations': observations,
+        'travauxEducatifs': travauxEducatifs,
+        'avertissements': avertissements,
+        'tachesAide': tachesAide,
+        'detentions': detentions,
+        'exclusions': exclusions,
+        'autres': autres,
+      };
+    } catch (e) {
+      print('❌ Erreur statistiques sanctions: $e');
+      return {
+        'total': 0,
+        'active': 0,
+        'remarqueOrales': 0,
+        'observations': 0,
+        'travauxEducatifs': 0,
+        'avertissements': 0,
+        'tachesAide': 0,
+        'detentions': 0,
+        'exclusions': 0,
+        'autres': 0,
+      };
+    }
   }
 }
-
-}
-
-
