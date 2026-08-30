@@ -1,17 +1,50 @@
-# Joussour
+<div align="center">
 
-A new Flutter project.
+<h1>Joussour 🎓</h1>
 
-## Getting Started
+**Joussour** is a class & student management application ("mon-classe") that keeps teachers and classrooms organized with a clean, mobile-first interface.
 
-This project is a starting point for a Flutter application.
+![Flutter](https://img.shields.io/badge/Flutter-02569B?logo=flutter&logoColor=white)
+![Dart](https://img.shields.io/badge/Dart-0175C2?logo=dart&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-FFCA28?logo=firebase&logoColor=black)
 
-A few resources to get you started if this is your first Flutter project:
+</div>
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+---
+## 📖 Overview
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-# mon-classe
+**Joussour** is a class & student management application ("mon-classe") that keeps teachers and classrooms organized with a clean, mobile-first interface.
+
+## ✨ Features
+
+- Student and class records
+- Cloud Firestore storage
+- Local push notifications
+- Cloud Functions automation
+- Secure authentication
+
+
+## 🛠 Tech Stack
+
+Flutter, Dart, Firebase.
+
+## 🚀 Getting Started
+
+```bash
+git clone <repo-url>
+cd <repo>
+flutter pub get
+flutter run
+```
+
+> Requires the [Flutter SDK](https://docs.flutter.dev/get-started/install) (stable channel).
+
+## 📬 Contact
+
+- **Email:** tounekti17@gmail.com
+- **LinkedIn:** [tounekti-mohamed](https://www.linkedin.com/in/tounekti-mohamed-b38935213/)
+- **GitHub:** [tounektimohamed](https://github.com/tounektimohamed)
+
+---
+
+<div align="center">Built with ❤️ by **Mohamed Tounekti**</div>
