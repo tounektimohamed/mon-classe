@@ -37,3 +37,9 @@ Thumbs.db
 # Node.js (pour Functions)
 functions/node_modules/
 functions/.env
+
+# Nettoyage 2026-08-30: retirés du suivi git
+# Dossier parasite cree par une completion ratee: "[D[D" (contient google-cloud-sdk entier)
+\x1b\[D\x1b\[D/
+functions/ui-debug.log
+build/
